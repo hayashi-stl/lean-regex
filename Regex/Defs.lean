@@ -8,12 +8,32 @@ inductive Regex.StarType where
   | lazy : StarType
   deriving Repr
 
+namespace Regex.StarType
+
+theorem greedy_iff_not_lazy (t : StarType) : t = greedy ↔ t ≠ lazy := by
+  cases t <;> simp
+
+theorem lazy_iff_not_greedy (t : StarType) : t = lazy ↔ t ≠ greedy := by
+  cases t <;> simp
+
+end Regex.StarType
+
 inductive Regex.BackrefDefault where
   /-- Fail if the capture doesn't exist -/
   | bot : BackrefDefault
   /-- Match the empty sequence if the capture doesn't exist -/
   | empty : BackrefDefault
   deriving Repr
+
+namespace Regex.BackrefDefault
+
+theorem bot_iff_not_empty (t : BackrefDefault) : t = bot ↔ t ≠ empty := by
+  cases t <;> simp
+
+theorem empty_iff_not_bot (t : BackrefDefault) : t = empty ↔ t ≠ bot := by
+  cases t <;> simp
+
+end Regex.BackrefDefault
 
 open Regex.StarType Regex.BackrefDefault
 

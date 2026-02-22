@@ -1,6 +1,7 @@
 import Regex.Algorithm.Defs
 import Regex.Algorithm.StackDMO
 import Regex.Except
+import Regex.Util
 
 -- A general termination argument based on decreasing actions
 
@@ -231,49 +232,50 @@ theorem top_equiv {st : MatchStack w} {as bs : List (Action w)}
       rw [stepN, step, Except.ok_bind]
       simpa only [show (ac.process st.arg).arg = st'.arg by simp [st'eq]]
 
---theorem pop_top {st : MatchStack w} {as bs : List (Action w)}
---    (term : st.Terminates) (hst : st.entries = as ++ bs)
---    : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
---      ∀ n' < n, ∀ st', st.stepN n' = Except.ok st' →
---        ∃ ac as', st'.entries = ac :: as' ++ bs := by
---  obtain ⟨n, mat, err⟩ := st.terminates_iff.mp term
---  induction n generalizing st as with
---  | zero => simp at err
---  | succ n ind =>
---    rw [stepN] at err
---    cases h : st.step with -- oops, cased here out of habit
---    | ok st' =>
---      rw [h, Except.ok_bind] at err
---      obtain ⟨ac, as', hac, st'eq⟩ := st.step_eq_ok h
---      cases has : as with
---      | nil => rw [has, List.nil_append] at hst; use 0, st; simpa
---      | cons a_ as_ =>
---        simp only [hst, has, List.cons_append, List.cons.injEq] at hac
---        have ent : st'.entries = ?_ := by
---          simp only [st'eq, ← hac.2, ← List.append_assoc]; rfl
---        obtain ⟨n', st'', stepn', hst'', min⟩ := ind (st.step_terminates term h) ent err
---        use n' + 1, st''
---        rw [stepN, h, Except.ok_bind]
---        refine ⟨stepn', hst'', ?_⟩
---        intro n_ n_lt st_ hst_
---        cases n_ with
---        | zero =>
---          rw [step0_eq_self, Except.ok_inj] at hst_
---          use a_, as_; simpa [← hst_, ← has]
---        | succ n_ =>
---          rw [stepN, h, Except.ok_bind] at hst_
---          exact min n_ (Nat.add_lt_add_iff_right.mp n_lt) st_ hst_
---    | error mat' =>
---      have emp := step_eq_error h
---      simp only [emp, List.nil_eq, List.append_eq_nil_iff] at hst
---      use 0, st; simp [*]
+/-- An older version of `pop_top` that assumes `st.Terminates` instead -/
+theorem pop_top' {st : MatchStack w} {as bs : List (Action w)}
+    (term : st.Terminates) (hst : st.entries = as ++ bs)
+    : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
+      ∀ n' < n, ∀ st', st.stepN n' = Except.ok st' →
+        ∃ ac as', st'.entries = ac :: as' ++ bs := by
+  obtain ⟨n, mat, err⟩ := st.terminates_iff.mp term
+  induction n generalizing st as with
+  | zero => simp at err
+  | succ n ind =>
+    rw [stepN] at err
+    cases h : st.step with -- oops, cased here out of habit
+    | ok st' =>
+      rw [h, Except.ok_bind] at err
+      obtain ⟨ac, as', hac, st'eq⟩ := st.step_eq_ok h
+      cases has : as with
+      | nil => rw [has, List.nil_append] at hst; use 0, st; simpa
+      | cons a_ as_ =>
+        simp only [hst, has, List.cons_append, List.cons.injEq] at hac
+        have ent : st'.entries = ?_ := by
+          simp only [st'eq, ← hac.2, ← List.append_assoc]; rfl
+        obtain ⟨n', st'', stepn', hst'', min⟩ := ind (st.step_terminates term h) ent err
+        use n' + 1, st''
+        rw [stepN, h, Except.ok_bind]
+        refine ⟨stepn', hst'', ?_⟩
+        intro n_ n_lt st_ hst_
+        cases n_ with
+        | zero =>
+          rw [step0_eq_self, Except.ok_inj] at hst_
+          use a_, as_; simpa [← hst_, ← has]
+        | succ n_ =>
+          rw [stepN, h, Except.ok_bind] at hst_
+          exact min n_ (Nat.add_lt_add_iff_right.mp n_lt) st_ hst_
+    | error mat' =>
+      have emp := step_eq_error h
+      simp only [emp, List.nil_eq, List.append_eq_nil_iff] at hst
+      use 0, st; simp [*]
 
 /-- An older version of `top_equiv` that assumes `st.Terminates` instead -/
-theorem top_equiv {st : MatchStack w} (term : st.Terminates)
+theorem top_equiv' {st : MatchStack w} (term : st.Terminates)
     {as bs : List (Action w)} (hst : st.entries = as ++ bs)
     : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
       (mk as st.arg).stepN (n + 1) = Except.error st''.arg := by
-  have ⟨n, st'', stepn, st''eq, min⟩ := st.pop_top term hst
+  have ⟨n, st'', stepn, st''eq, min⟩ := st.pop_top' term hst
   induction n generalizing st as with
   | zero =>
     use 0, st'', stepn, st''eq
@@ -302,16 +304,10 @@ theorem top_equiv {st : MatchStack w} (term : st.Terminates)
       rw [stepN, step, Except.ok_bind]
       simpa only [show (ac.process st.arg).arg = st'.arg by simp [st'eq]]
 
-
 theorem top_terminates {st : MatchStack w} {as bs : List (Action w)}
     (term : st.Terminates) (hst : st.entries = as ++ bs)
     : (mk as st.arg).Terminates := by
-  have ⟨n, mat, stepn⟩ := terminates_iff.mp term
-  induction n generalizing st as with
-  | zero => simp at stepn
-  | succ n ind =>
-
-  have ⟨_, _, _, _, err⟩ := st.top_equiv term hst
+  have ⟨_, _, _, _, err⟩ := st.top_equiv' term hst
   exact terminates_of_stepN err
 
 structure Terminator (w : List α) where
@@ -420,9 +416,40 @@ end T
 theorem coe_val {st : MatchStack w} (term : st.Terminates)
   : st = (⟨st, term⟩ : T w).val := rfl
 
+/-- A convenience function for running a match stack -/
+def run (st : MatchStack w) (term : st.Terminates) := T.run ⟨st, term⟩
+
+theorem run_eq_step_run {st : MatchStack w} (term : st.Terminates)
+    : st.run term = match h : st.step with
+      | Except.ok st' => st'.run (step_terminates term h)
+      | Except.error mat => mat := by
+  rw [run, T.run]
+  split <;> expose_names
+  · simp only [T.step_eq_ok_coe] at heq; rw! [heq]; simp only; rfl
+  · simp only [T.step_eq_error_coe] at heq; rw! [heq]; simp only
+
+theorem run_eq_stepN_run {st : MatchStack w} (n : ℕ) (term : st.Terminates)
+    : st.run term = match h : st.stepN n with
+      | Except.ok st' => st'.run (stepN_terminates term h)
+      | Except.error mat => mat := by
+  induction n generalizing st with | zero => rw! [step0_eq_self]; simp | succ n ind =>
+    rw! [stepN]
+    let step' := st.step
+    cases h : step' with
+    | ok st' =>
+      simp only [step'] at h
+      rw! [h, Except.ok_bind]
+      specialize ind (step_terminates term h)
+      rw! [run_eq_step_run, h]; simp only
+      exact ind
+    | error mat =>
+      simp only [step'] at h
+      rw! [h, Except.error_bind, run_eq_step_run, h]
+      rfl
+
 theorem run_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches w}
     (hst : st.stepN n = Except.error mat)
-    : T.run ⟨st, terminates_of_stepN hst⟩ = mat := by
+    : st.run (terminates_of_stepN hst) = mat := by
   have term := terminates_of_stepN hst
   induction n generalizing st with | zero => simp at hst | succ n ind =>
     cases h : st.step with
@@ -430,19 +457,46 @@ theorem run_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches w}
       rw [stepN, h, Except.ok_bind] at hst
       specialize ind hst (st.step_terminates term h)
       rw [coe_val term, coe_val (st.step_terminates term h), ← T.step_eq_ok_coe] at h
-      rw [T.run, h]
+      rw [run, T.run, h]
       simpa
     | error mat' =>
       rw [stepN, h, Except.error_bind, Except.error_inj] at hst
       rw [coe_val term, ← T.step_eq_error_coe] at h
-      rw [T.run, h, hst]
+      rw [run, T.run, h, hst]
+
+theorem stepN_of_run {st : MatchStack w} (term : st.Terminates)
+    : ∃ n, st.stepN n = Except.error (st.run term) := by
+  have ⟨n, mat, hst⟩ := terminates_iff.mp term
+  induction n generalizing st with | zero => simp at hst | succ n ind =>
+    cases h : st.step with
+    | ok st' =>
+      rw [stepN, h, Except.ok_bind] at hst
+      have ⟨n', hst'⟩ := ind (st.step_terminates term h) hst
+      use n' + 1
+      rw [stepN, h, Except.ok_bind, run_eq_step_run]
+      rw! [h]; simpa only
+    | error mat' =>
+      use 1
+      rw! [step1_eq_step, run_eq_step_run, h]; simp only
 
 theorem top_run_equiv {st : MatchStack w}
-    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
-    (term : (mk as st.arg).Terminates)
+    {as bs : List (Action w)} (term : (mk as st.arg).Terminates)
+    (hst : st.entries = as ++ bs)
     : ∃ n, st.stepN n =
-      Except.ok (mk bs (T.run ⟨mk as st.arg, term⟩)) := by
+      Except.ok (mk bs ((mk as st.arg).run term)) := by
   have ⟨n, st', hst', st'eq, stepn⟩ := st.top_equiv term hst
+  use n
+  have run := run_of_stepN stepn
+  simp only [run, hst']
+  rw [Except.ok_inj]
+  have st'mk : st' = mk st'.entries st'.arg := rfl
+  rwa [st'eq] at st'mk
+
+theorem top_run_equiv' {st : MatchStack w} (term : st.Terminates)
+    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+    : ∃ n, st.stepN n =
+      Except.ok (mk bs ((mk as st.arg).run (top_terminates term hst))) := by
+  have ⟨n, st', hst', st'eq, stepn⟩ := st.top_equiv' term hst
   use n
   have run := run_of_stepN stepn
   simp only [run, hst']
@@ -456,17 +510,29 @@ theorem top_run_equiv {st : MatchStack w}
 --  have ⟨n, top⟩ := st.top_run_equiv term hst
 --  exact stepN_terminates term top
 
-theorem top_run_terminates_iff {st : MatchStack w} {n : ℕ}
+theorem top_run_terminates_iff {st : MatchStack w}
     {as bs : List (Action w)} (hst : st.entries = as ++ bs)
-    : st.Terminates ↔ ∃ top : (mk as st.arg).Terminates,
-      (mk bs (T.run ⟨mk as st.arg, top⟩)).Terminates := by
+    : st.Terminates ↔ (top : (mk as st.arg).Terminates) ∧
+      (mk bs ((mk as st.arg).run top)).Terminates := by
   constructor
   · intro term
     use st.top_terminates term hst
-    have ⟨n, top⟩ := st.top_run_equiv term hst
+    have ⟨n, top⟩ := st.top_run_equiv' term hst
     exact stepN_terminates term top
   · intro ⟨term, run⟩
+    have ⟨n, top⟩ := st.top_run_equiv term hst
+    have ⟨n', mat, term'⟩ := terminates_iff.mp run
+    rw [terminates_iff]
+    use n + n', mat
+    rwa [stepN_add_eq_bind, top, Except.ok_bind]
 
+theorem run_eq_top_run {st : MatchStack w} {term : st.Terminates}
+    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+    : st.run term =
+      (mk bs ((mk as st.arg).run ((top_run_terminates_iff hst).mp term).1)).run
+        ((top_run_terminates_iff hst).mp term).2 := by
+  have ⟨n, equiv⟩ := top_run_equiv' term hst
+  rw! [run_eq_stepN_run n term, equiv]; simp
 
 def step_acc {β : Type*} {f : β → MatchStack w} {a : β}
     (acc : Acc (fun b a ↦ (f a).step = Except.ok (f b)) a)

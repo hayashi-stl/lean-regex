@@ -29,8 +29,8 @@ def Action.process (ac : Action w) (arg : PartialMatches w)
     | .or q r => ⟨[regex q s cap, orWait r s cap], []⟩
     | .filterEmpty emp r => ⟨[regex r s cap, filterEmpty emp s], []⟩
     | .star t r => match t with
-      | .greedy => ⟨[regex [/(⟨r⟩ •ε | (⟨r⟩ -ε)⟨r⟩*) | ε/] s cap], []⟩
-      | .lazy => ⟨[regex [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε)⟨r⟩*)/] s cap], []⟩
+      | .greedy => ⟨[regex [/(⟨r⟩ •ε | (⟨r⟩ -ε)⟨r⟩*‹t›) | ε/] s cap], []⟩
+      | .lazy => ⟨[regex [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε)⟨r⟩*‹t›)/] s cap], []⟩
     | .start => ⟨[], if s = 0 then [(s, cap)] else []⟩
     | .end' => ⟨[], if s = s.end' then [(s, cap)] else []⟩
     | .capture n r => ⟨[regex r s cap, capture n s], []⟩

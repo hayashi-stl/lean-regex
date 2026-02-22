@@ -14,7 +14,7 @@ scoped syntax:max "ε" : regex
 scoped syntax:max str : regex
 scoped syntax:max term':max : regex
 scoped syntax:max "⟨" term:min "⟩" : regex
-scoped syntax:70 regex:71 regex:70 : regex
+scoped syntax:70 regex:71 ppSpace regex:70 : regex
 scoped syntax:55 regex:56 " | " regex:55 : regex
 scoped syntax:max regex:max "*" : regex
 scoped syntax:max regex:max "*?" : regex
