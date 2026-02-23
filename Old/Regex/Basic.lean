@@ -23,7 +23,9 @@ theorem StarType.flatten_match {α : Type*} (t : StarType) (gg gl lg ll : α)
         | .lazy => match t with | .greedy => lg | .lazy => ll) =
       (match t with | .greedy => gg | .lazy => ll) := by rcases t <;> simp
 
-/-- Initialize a partial match stack -/
+--def isTerminating (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w) :=
+--  (Action.regex r s cap).terminator.isSome
+
 def initMatchPartial (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
     : MatchStack w where
   entries := [Action.regex r s cap]
@@ -410,13 +412,13 @@ theorem matchPartial_or (q r : Regex α) (s : Pos w) (cap : Captures w)
 
 theorem Action.filterEmpty_run {emp : Bool} {s : Pos w} {arg : PartialMatches w}
     : (mk [.filterEmpty emp s] arg).run filterEmpty_terminates
-      = arg.filter fun ent => (s ≥ ent.1) = emp := by step; step
+      = arg.filter fun ent => (s = ent.1) = emp := by step; step
 
 theorem matchPartial_filterEmpty (emp : Bool) (r : Regex α) (s : Pos w) (cap : Captures w)
     (term : [/⟨r⟩ ‹emp›ε/].Terminates w s cap)
     : matchPartial [/⟨r⟩ ‹emp›ε/] w s cap term =
       (r.matchPartial w s cap (filterEmpty_terminates.mp term)).filter
-        fun ent ↦ (s ≥ ent.1) = emp := by
+        fun ent ↦ (s = ent.1) = emp := by
   rw [matchPartial]
   simp only [initMatchPartial]
   step
@@ -442,7 +444,7 @@ theorem star_terminates {t : StarType} {r : Regex α} {s : Pos w}
     {cap : Captures w}
     : [/⟨r⟩*‹t›/].Terminates w s cap ↔ (term : r.Terminates w s cap) ∧
       ∀ mat ∈ r.matchPartial w s cap term,
-        s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
+        s ≠ mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
   rw [Terminates, initMatchPartial]
   step only [List.append_nil]
   cases t with
@@ -460,21 +462,6 @@ theorem star_terminates {t : StarType} {r : Regex α} {s : Pos w}
     rw! [filterEmpty_terminates, concat_terminates,
       filterEmpty_terminates]
     simp [dand_iff_and_forall, empty_terminates, matchPartial_filterEmpty]
-
-/-- `star t r` terminates if (but not only if)
-`r` terminates for every capture and for every position starting from here -/
-theorem star_terminates_of_forall {t : StarType} {r : Regex α} {s : Pos w}
-    {cap : Captures w}
-    : (∀ s' ≥ s, ∀ cap', r.Terminates w s' cap') →
-      [/⟨r⟩*‹t›/].Terminates w s cap := by
-  intro term
-  induction h : s.distToEnd using Nat.strongRec generalizing s cap with
-  | ind n ind =>
-    rw [star_terminates]
-    refine ⟨term s (le_refl _) cap, fun mat mem lt ↦ ?_⟩
-    simp only [← h] at ind
-    exact ind mat.1.distToEnd (Icc.distToEnd_lt.mp lt)
-      (fun s' ge ↦ term s' (le_of_lt (Trans.trans lt ge))) rfl
 
 theorem matchPartial_star (t : StarType) (r : Regex α) (s : Pos w) (cap : Captures w)
     (term : [/⟨r⟩*‹t›/].Terminates w s cap)
@@ -597,141 +584,218 @@ section Tactic
 open Lean Parser Tactic
 
 macro "termination" : tactic =>
-  `(tactic| (repeat simp [
+  `(tactic| simp [
     bot_terminates, empty_terminates, unit_terminates, concat_terminates,
     or_terminates, filterEmpty_terminates, start_terminates, end'_terminates,
-    capture_terminates, backref_terminates, star_terminates_of_forall];
-    ))
+    capture_terminates, backref_terminates])
 
 end Tactic
 
-/-- Returns all matches that end at the end of the string -/
 def match' (r : Regex α) (w : List α) (term : r.Terminates w 0 0) :
   PartialMatches w := [/⟨r⟩ ⊣/].matchPartial w 0 0
     (concat_terminates.mpr ⟨term, fun _ _ ↦ end'_terminates⟩)
 
-theorem match'_def {r : Regex α} {w : List α} (term : r.Terminates w 0 0)
-    : r.match' w term = (r.matchPartial w 0 0 term).filter fun mat ↦ mat.1 = mat.1.end' := by
-  rw [match', matchPartial_concat]
-  simp only [matchPartial_end', Prod.mk.eta, List.pmap_eq_map]
-  rw [← List.flatMap_def, ← List.filterMap_eq_filter, List.filterMap_eq_flatMap_toList]
-  simp only [Option.guard_apply, decide_eq_true_eq]
-  congr; ext mat n mat'
-  split <;> simp
+#eval match' [/(‹1› 0 | 1) 1 2 3/] [0, 1, 2, 3] (by termination)
 
-/-- Returns whether the whole sequence matches the regex -/
-def isMatch (r : Regex α) (w : List α) (term : r.Terminates w 0 0) :=
-  ¬(r.match' w term).isEmpty
-
-/-- `⊥` never matches -/
-theorem isMatch_bot : ¬[/⊥/].isMatch w bot_terminates := by
-  simp [isMatch, match'_def, matchPartial_bot]
-
-/-- The empty regex matches only the empty string -/
-theorem isMatch_empty : [//].isMatch w empty_terminates ↔ w = [] := by
-  simp [isMatch, match'_def, matchPartial_empty]
-  simp [Icc.zero_end']
-
-/-- A unit regex matches only the singleton sequence that has that unit -/
-theorem isMatch_unit {c : α} : [/`‹c›/].isMatch w unit_terminates ↔ w = [c] := by
-  simp only [isMatch, match'_def, ← Icc.val_inj, Icc.end'_val, matchPartial_unit,
-    Icc.zero_val, List.isEmpty_iff, List.filter_eq_nil_iff, List.mem_dite_nil_right,
-    List.mem_cons, List.not_mem_nil, or_false, decide_eq_true_eq, forall_exists_index,
-    forall_eq_apply_imp_iff, Icc.succOfIndex_val, zero_add, Classical.not_imp,
-    Decidable.not_not]
-  rw [eq_comm (a := 1), List.length_eq_one_iff, List.getElem?_eq_some_iff]
-  constructor
-  · rintro ⟨⟨lt, eqc⟩, ⟨c', eqc'⟩⟩
-    simp only [eqc', List.getElem_cons_zero, List.cons.injEq, and_true] at eqc ⊢
-    exact eqc
-  · intro wc; simp [wc]
-
-/-- An alternation between `q` and `r` matches iff `q` matches or `r` matches -/
-theorem isMatch_or {q r : Regex α} (term : [/⟨q⟩ | ⟨r⟩/].Terminates w 0 0)
-    : [/⟨q⟩ | ⟨r⟩/].isMatch w term ↔
-      q.isMatch w (or_terminates.mp term).1 ∨ r.isMatch w (or_terminates.mp term).2 := by
-  simp [isMatch, match'_def, matchPartial_or, imp_iff_not_or]
-
-theorem decide_eq_bool {p : Prop} [Decidable p] {b : Bool}
-    : decide p = b ↔ (p ↔ b = true) := by cases b <;> simp
-
-theorem isMatch_filterEmpty {e : Bool} {r : Regex α}
-    (term : [/⟨r⟩ ‹e›ε/].Terminates w 0 0)
-    : [/⟨r⟩ ‹e›ε/].isMatch w term ↔
-      r.isMatch w (filterEmpty_terminates.mp term) ∧ (w.length = 0) = e := by
-  simp [isMatch, match'_def, matchPartial_filterEmpty,
-    decide_eq_bool, Icc.end'_eq 0, Icc.val_le_val]
-
--- Some silly ones
-
-/-- The start anchor full-matches only the empty sequence -/
-theorem isMatch_start : [/⊢/].isMatch w start_terminates ↔ w = [] := by
-  simp [isMatch, match'_def, matchPartial_start]
-  simp [Icc.zero_end']
-
-/-- The end anchor full-matches only the empty sequence -/
-theorem isMatch_end' : [/⊣/].isMatch w end'_terminates ↔ w = [] := by
-  simp [isMatch, match'_def, matchPartial_end']
-  simp [Icc.zero_end']
-
-/-- A capture of `r` matches iff `r` matches -/
-theorem isMatch_capture {n : ℕ} {r : Regex α} (term : [/(‹n› ⟨r⟩)/].Terminates w 0 0)
-    : [/(‹n› ⟨r⟩)/].isMatch w term ↔ r.isMatch w (capture_terminates.mp term) := by
-  simp [isMatch, match'_def, matchPartial_capture]
-
-/-- A full-match on a backref just defaults -/
-theorem isMatch_backref {d : BackrefDefault} {n : ℕ}
-    : [/\‹d›n/].isMatch w backref_terminates ↔ match d with
-        | .bot => False
-        | .empty => w = [] := by
-  simp [isMatch, match'_def, matchPartial_backref]
-  split <;> simp [Icc.zero_end']
-
-def language (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
-  : Language α := {w | isMatch r w (term w)}
-
-theorem language_bot : ([/⊥/] : Regex α).language (fun _ ↦ bot_terminates) = 0 := by
-  simp [language, isMatch_bot]
-  rfl
-
-theorem language_empty : ([//] : Regex α).language (fun _ ↦ empty_terminates) = {[]} := by
-  simp [language, isMatch_empty]
-
-theorem language_unit {c : α} : [/c/].language (fun _ ↦ unit_terminates) = {[c]} := by
-  simp [language, isMatch_unit]
-
-theorem language_or {q r : Regex α} (term : ∀ w, [/⟨q⟩ | ⟨r⟩/].Terminates w 0 0)
-  : [/⟨q⟩ | ⟨r⟩/].language term
-    = q.language (fun _ ↦ (or_terminates.mp (term _)).1) +
-      r.language (fun _ ↦ (or_terminates.mp (term _)).2) := by
-  simp [language, isMatch_or, Language.add_def, Set.union_def]
-
-theorem language_filterEmpty {e : Bool} {r : Regex α}
-    (term : ∀ w, [/⟨r⟩ ‹e›ε/].Terminates w 0 0)
-    : ([/⟨r⟩ ‹e›ε/] : Regex α).language term = if e then
-        r.language (fun _ ↦ filterEmpty_terminates.mp (term _)) ⊓ {[]} else
-        r.language (fun _ ↦ filterEmpty_terminates.mp (term _)) - {[]} := by
-  simp only [language, isMatch_filterEmpty, List.length_eq_zero_iff, eq_iff_iff]
-  split <;> (expose_names; simp only [h, iff_true, Bool.false_eq_true, iff_false])
-  · ext x; rw [Language.mem_inf, Set.setOf_and, Set.mem_inter_iff]; rfl
-  · ext x; rw [Language.mem_sub, Set.setOf_and, Set.mem_inter_iff]; rfl
-
-theorem language_start : ([/⊢/] : Regex α).language (fun _ ↦ start_terminates) = {[]} := by
-  simp [language, isMatch_start]
-
-theorem language_end' : ([/⊣/] : Regex α).language (fun _ ↦ end'_terminates) = {[]} := by
-  simp [language, isMatch_end']
-
-theorem language_capture {n : ℕ} {r : Regex α} (term : ∀ w, [/(‹n› ⟨r⟩)/].Terminates w 0 0)
-    : ([/(‹n› ⟨r⟩)/] : Regex α).language term =
-      r.language (fun _ ↦ capture_terminates.mp (term _)) := by
-  simp [language, isMatch_capture]
-
-theorem language_backref {d : BackrefDefault} {n : ℕ}
-    : ([/\‹d›n/] : Regex α).language (fun _ ↦ backref_terminates) = match d with
-      | .bot => 0
-      | .empty => {[]} := by
-  simp [language, isMatch_backref]
-  split <;> simp; rfl
+--mutual
+----def matchPartialStar (t : StarType) (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
+----    : List (IccFrom s × Captures w) :=
+----  matchPartial r w s cap >>=
+----  /- Matching an empty string means you can't continue -/
+----    fun (s', cap') ↦ if s.val = s'.val then pure (s', cap') else
+----      (fun (s'', cap'') ↦ (s'.widenLeft s'', cap'')) <$>
+----      matchPartial (star t r) w s'.expandZero cap'
+----termination_by (star t r, s.distToEnd, 0)
+----decreasing_by
+----  · simp only [Prod.lex_def, star.sizeOf_spec, Nat.lt_add_left_iff_pos, Nat.lt_irrefl,
+----      Nat.not_lt_zero, and_false, or_self, or_false]
+----    exact Nat.lt_add_right (sizeOf t) Nat.zero_lt_one
+----  · rename_i hs
+----    simp only [Prod.lex_def, star.sizeOf_spec, Nat.lt_irrefl, Nat.not_lt_zero, and_false,
+----      or_false, true_and, false_or]
+----    apply Icc.distToEnd_lt
+----    rcases lt_or_eq_of_le s'.is_ge with slt | seq
+----    · exact slt
+----    · contradiction
+--
+--/-- Partial match: takes a regex, a string, a start position, and a list of
+--current captures, and returns a list of possible matches to check in order.
+--Each match is an end position combined with a capture list. -/
+--partial def matchPartial (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
+--    : List (IccFrom s × Captures w) :=
+--  match r with
+--  | bot => failure
+--  | empty => pure (s.iccFrom, cap)
+--  | unit c => if hs : w[s.val]? = c then pure (Icc.succOfIndex hs, cap) else failure
+--  | concat q r => do
+--      let (s', cap') ← q.matchPartial w s cap
+--      let (s'', cap'') ← r.matchPartial w s'.expandZero cap'
+--      pure (s'.widenLeft s'', cap'')
+--  | or q r => q.matchPartial w s cap ++ r.matchPartial w s cap
+--  | filterEmpty emp r => do
+--      let (s', cap') ← r.matchPartial w s cap
+--      if (s'.val = s.val) = emp then pure (s', cap') else failure
+--  --| star t r => match t with
+--  --  | .greedy => matchPartialStar .greedy r w s cap ++ pure (s.iccFrom, cap)
+--  --  | .lazy => pure (s.iccFrom, cap) ++ matchPartialStar .lazy r w s cap
+--  | star t r => match t with
+--    | .greedy => matchPartial [/(¥ᵣ(r) •ε | (¥ᵣ(r) -ε) ¥ᵣ(r)*) | ε/] w s cap
+--    | .lazy => matchPartial [/ε | (¥ᵣ(r) •ε | (¥ᵣ(r) -ε) ¥ᵣ(r)*?)/] w s cap
+--  | capture n r => do
+--      let (s', cap') ← r.matchPartial w s cap
+--      pure (s', cap'.update n (pure ⟨s, s'⟩))
+--  | backref d n => do
+--      let ⟨cs, ct⟩ ← if let some w' := (cap n).getLast? then pure w'
+--        else return (← matchPartial d w s cap)
+--      if h : w.extract s.val (s.val + (ct.val - cs.val)) = w.extract cs.val ct.val then
+--        pure (Icc.addOfIndex h (length_extract_pos_posFrom cs ct), cap) else failure
+----termination_by (s.distToEnd, r.numRawStars, r)
+----decreasing_by
+----  all_goals have sizelt (a b : ℕ) : a < 1 + a + b := by linarith
+----  all_goals have zz (n : ℕ) : 0 < n ∨ n = 0 := by omega
+----  any_goals simp [Prod.lex_def, numRawStars, sizelt, ← le_iff_lt_or_eq, zz]
+--end
+--
+--theorem matchPartial_bot (w : List α) (s : Pos w) (cap : Captures w)
+--    : matchPartial [/⊥/] w s cap = [] := by
+--  simp [matchPartial, failure]
+--
+--theorem matchPartial_empty (w : List α) (s : Pos w) (cap : Captures w)
+--    : matchPartial [//] w s cap = [(s.iccFrom, cap)] := by
+--  simp [matchPartial]
+--
+----theorem matchPartial_star_nil (t : StarType) (r : Regex α) (s : Pos []) (cap : Captures [])
+----    : Prod.fst <$> (star t r).matchPartial [] s cap =
+----      if matchPartial r [] s cap = [] then [s.posFrom] else [s.posFrom, s.posFrom] := by
+----  rcases t
+----  · simp only [matchPartial, List.pure_def, List.cons_append, List.nil_append,
+----      List.map_eq_map, List.map_cons]
+----    simp only [matchPartialStar, Prod.mk.eta, List.pure_def, List.map_eq_map,
+----      List.bind_eq_flatMap]
+----    split_ifs with h
+----    · simp [h]
+----    ·
+--
+--/-- A finishing partial match -/
+--def matchFinish (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
+--    : Option (Captures w) :=
+--  Prod.snd <$> (matchPartial r w s cap).find? fun (s, _) ↦ s = s.end'
+--
+--/-- Matches a regex against an entire string.
+--Returns a list of captures if it succeeds.
+--Called `match'` because `match` is a keyword. -/
+--def match' (r : Regex α) (w : List α) : Option (Captures w) := matchFinish r w 0 0
+--  --Prod.snd <$> (matchPartial r w 0 0).find? fun (s, _) ↦ s = Pos.end'
+--
+--theorem match'_bot (w : List α) : match' [/⊥/] w = none := by
+--  simp [match', matchFinish, matchPartial_bot]
+--
+--theorem match'_empty (w : List α) : match' [//] w = if w = [] then some 0 else none := by
+--  simp only [match', matchFinish, matchPartial_empty, List.find?_singleton,
+--    decide_eq_true_eq, Option.map_eq_map, Option.map_if]
+--  congr
+--  rw [Icc.zero_end']
+--  rfl
+--
+--theorem match'_unit (c : α) (w : List α)
+--    : match' [/c/] w = if w = [c] then some 0 else none := by
+--  simp only [match', matchFinish, matchPartial, List.pure_def, Option.map_eq_map]
+--  split_ifs with w0c wc wc
+--  · simp only [List.find?_singleton, decide_eq_true_eq, Option.map_if,
+--      ite_eq_left_iff, reduceCtorEq, imp_false, Decidable.not_not]
+--    rw [← Subtype.val_inj]
+--    simp [Icc.succOfIndex, wc]
+--  · simp only [List.find?_singleton, decide_eq_true_eq, Option.map_if, ite_eq_right_iff,
+--      reduceCtorEq, imp_false]
+--    contrapose! wc
+--    apply_fun Subtype.val at wc
+--    simp only [Icc.zero_val, Icc.succOfIndex_val, zero_add, Icc.end'_val] at wc
+--    rw [Icc.zero_val] at w0c
+--    rw [eq_comm, List.length_eq_one_iff] at wc
+--    rcases wc with ⟨a, wa⟩
+--    have wa' := congrArg (·[0]?) wa
+--    simp only [w0c, List.length_cons, List.length_nil, zero_add, zero_lt_one,
+--      getElem?_pos, List.getElem_cons_zero, Option.some.injEq] at wa'
+--    exact wa' ▸ wa
+--  · simp [wc] at w0c
+--  · simp [failure]
+--
+--theorem match'_concat (q r : Regex α) (w : List α)
+--    : match' [/¥ᵣ(q)¥ᵣ(r)/] w = (matchPartial q w 0 0).findSome?
+--        (fun (s, cap) ↦ matchFinish r w s cap) := by
+--  simp only [match', matchFinish, matchPartial, List.pure_def, List.bind_eq_flatMap,
+--    List.find?_flatMap, List.find?_singleton, decide_eq_true_eq, Option.map_eq_map,
+--    List.map_findSome?]
+--  congr
+--  rw [Function.comp_def]
+--  ext x cs
+--  rw [Option.map_eq_some_iff, Option.map_eq_some_iff]
+--  simp only [Prod.exists, exists_eq_right]
+--  simp only [List.findSome?_eq_some_iff, Option.ite_none_right_eq_some, Option.some.injEq,
+--    Prod.mk.injEq, ite_eq_right_iff, reduceCtorEq, imp_false, Prod.forall,
+--    exists_and_right, Prod.exists, ↓existsAndEq, and_true]
+--  rw [exists_comm]
+--  apply exists_congr; intro s
+--  simp only [List.find?_eq_some_iff_append, decide_eq_true_eq, Bool.not_eq_eq_eq_not,
+--    Bool.not_true, decide_eq_false_iff_not, Prod.forall, exists_and_right,
+--    ← Icc.val_inj]
+--  rw [← exists_and_left]
+--  apply exists_congr; intro csl
+--  rw [and_left_comm]
+--  rfl
+--
+--theorem match'_or (q r : Regex α) (w : List α)
+--    : match' (or q r) w = (match' q w <|> match' r w) := by
+--  simp only [match', matchFinish, matchPartial, List.find?_append, Option.map_eq_map,
+--    Option.orElse_eq_orElse, Option.orElse_eq_or]
+--  rw [Option.map_or]
+--
+--/-- Matching specialized to strings. -/
+--def matchStr (r : Regex Char) (w : String) := match' r w.toList
+--
+--def isMatch (r : Regex α) (w : List α) := ∃ cs, match' r w = some cs
+--
+--theorem isMatch_bot (w : List α) : ¬isMatch [/⊥/] w := by
+--  simp [isMatch, match'_bot]
+--
+--theorem isMatch_empty (w : List α) : isMatch [//] w ↔ w = [] := by
+--  simp [isMatch, match'_empty]
+--
+--theorem isMatch_unit (c : α) (w : List α) : isMatch [/c/] w ↔ w = [c] := by
+--  simp [isMatch, match'_unit]
+--
+--theorem isMatch_or (q r : Regex α) (w : List α)
+--    : isMatch (or q r) w ↔ isMatch q w ∨ isMatch r w := by
+--  simp only [isMatch, match'_or, Option.orElse_eq_orElse, Option.orElse_eq_or,
+--    Option.or_eq_some_iff]
+--  constructor <;> intro excs
+--  · rcases excs with ⟨cs, qcs | ⟨q0, rcs⟩⟩
+--    · exact Or.inl ⟨cs, qcs⟩
+--    · exact Or.inr ⟨cs, rcs⟩
+--  · by_cases qcs : ∃ cs, q.match' w = some cs
+--    · rcases qcs with ⟨cs, qcs⟩
+--      exact ⟨cs, Or.inl qcs⟩
+--    · simp only [qcs, false_or] at excs
+--      push_neg at qcs
+--      rw [← Option.eq_none_iff_forall_ne_some] at qcs
+--      rcases excs with ⟨cs, rcs⟩
+--      exact ⟨cs, Or.inr ⟨qcs, rcs⟩⟩
+--
+--def language (r : Regex α) : Language α := {w | isMatch r w}
+--
+--theorem language_bot (α : Type*) [DecidableEq α] : ([/⊥/] : Regex α).language = 0 := by
+--  simp [language, isMatch_bot]
+--  rfl
+--
+--theorem language_empty (α : Type*) [DecidableEq α] : ([//] : Regex α).language = {[]} := by
+--  simp [language, isMatch_empty]
+--
+--theorem language_unit (c : α) : [/c/].language = {[c]} := by
+--  simp [language, isMatch_unit]
+--
+--theorem language_or (q r : Regex α) : (or q r).language = q.language + r.language := by
+--  simp [language, isMatch_or, Language.add_def, Set.union_def]
+--
+--#eval matchStr [/(1 ← ('0' | '1')*) \⊥1/] "011011"
 
 end Regex

@@ -3,25 +3,16 @@ import Regex.Parse
 namespace Regex
 variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 
-/-- Various actions the match stack can execute -/
 inductive Action {α : Type u} (w : List α) : Type u where
-  /-- Start a regex match (and maybe finish it). -/
   | regex (r : Regex α) (s : Pos w) (cap : Captures w) : Action w
-  /-- Wait for matches from the first regex of a concatenation -/
   | concatWait (q : Regex α) (r : Regex α) (s : Pos w) : Action w
-  /-- Process the second regex with another match -/
   | concat (r : Regex α) (s : Pos w) (old new : PartialMatches w) : Action w
-  /-- Wait for matches from the first regex of an alternation -/
   | orWait (r : Regex α) (s : Pos w) (cap : Captures w) : Action w
-  /-- Concatenate the two lists of matches -/
   | or (s : Pos w) (fst : PartialMatches w) : Action w
-  /-- Filter matches for emptiness -/
   | filterEmpty (emp : Bool) (s : Pos w) : Action w
-  /-- Capture a match -/
   | capture (n : ℕ) (s : Pos w) : Action w
   deriving Repr
 
-/-- A stack of actions, along with an argument -/
 @[ext]
 structure MatchStack (w : List α) where
   entries : List (Action w)
@@ -56,11 +47,10 @@ def Action.process (ac : Action w) (arg : PartialMatches w)
     | (s', cap) :: old => ⟨[regex r s' cap, concat r s old (new ++ arg)], []⟩
   | .orWait r s cap => ⟨[regex r s cap, or s arg], []⟩
   | .or _ fst => ⟨[], fst ++ arg⟩
-  | .filterEmpty emp s => ⟨[], arg.filter fun (s', _) ↦ (s ≥ s') = emp⟩
+  | .filterEmpty emp s => ⟨[], arg.filter fun (s', _) ↦ (s = s') = emp⟩
   | .capture n s => ⟨[], arg.map fun (s', cap) ↦
       (s', cap.update n [(s, s')])⟩
 
-/-- The position associated with an action. Used for position lawfulness proofs -/
 def Action.pos (ac : Action w) : Pos w := match ac with
   | .regex _ s _ => s
   | .concatWait _ _ s => s
@@ -70,11 +60,8 @@ def Action.pos (ac : Action w) : Pos w := match ac with
   | .filterEmpty _ s => s
   | .capture _ s => s
 
-/-- The result of stepping the match stack. Either the next state or the
-match result -/
 def StepResult (w : List α) := Except (PartialMatches w) (MatchStack w)
 
-/-- Constructs a match stack out of a single action -/
 def Action.matchStack (ac : Action w) (arg : PartialMatches w)
     : MatchStack w := MatchStack.mk [ac] arg
 

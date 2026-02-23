@@ -10,8 +10,7 @@ namespace Regex
 
 variable {α : Type u} [deq : DecidableEq α] {w : List α}
 
-/-- Probably easier to work with than `Fin` and subtyping at the same time.
-`Icc a b` is the subtype of natural numbers `n` where `a ≤ n ≤ b`. -/
+/-- Probably easier to work with than `Fin` and subtyping at the same time -/
 def Icc (a b : ℕ) := {x : ℕ // a ≤ x ∧ x ≤ b}
   deriving LE, LT, DecidableEq, Repr, Min, Max, LinearOrder,
     Std.LawfulOrderMin, Std.LawfulOrderMax
@@ -22,11 +21,8 @@ section Icc
 
 variable {a b : ℕ}
 
-/-- A valid position in a string `w` (including the end) -/
 @[reducible] def Pos (w : List α) := Icc 0 w.length deriving Repr
-/-- A position from `c` to `b` -/
 @[reducible] def IccFrom (c : Icc a b) := Icc c.val b deriving Repr
-/-- A position from `a` to `c` -/
 @[reducible] def IccTo (c : Icc a b) := Icc a c.val deriving Repr
 
 namespace Icc
@@ -41,8 +37,6 @@ theorem is_le (s : Icc a b) : s.val ≤ b := s.property.right
 end Icc
 
 omit deq in
-/-- The length of a list extraction using valid positions `s` and `t ≥ s`
-is just `t - s` with no underflow -/
 @[simp] theorem _root_.List.length_extract_icc (w : List α) (s : Pos w) (t : IccFrom s)
     : (w.extract s.val t.val).length + s.val = t.val := by
   simp only [List.extract_eq_drop_take, List.length_take, List.length_drop]
@@ -52,8 +46,6 @@ is just `t - s` with no underflow -/
   rw [mints, Nat.sub_add_cancel t.is_ge]
 
 omit deq in
-/-- The length of a list extraction using valid positions `s` and `t ≥ s`
-is just `t - s` with no underflow -/
 @[simp] theorem _root_.List.length_extract_nat {w : List α} {s t : ℕ}
     (hs : s ≤ t) (ht : t ≤ w.length)
     : (w.extract s t).length + s = t := by
@@ -67,8 +59,6 @@ is just `t - s` with no underflow -/
 --    : (as ++ bs).min? = as.m
 
 omit deq in
-/-- The length of a list extraction using valid positions `s` and `t`
-is just `t - s`, potentially with underflow -/
 @[simp] theorem _root_.List.length_extract_icc' (w : List α) (s : Pos w) (t : Pos w)
     : (w.extract s.val t.val).length = t.val - s.val := by
   simp only [List.extract_eq_drop_take, List.length_take, List.length_drop,
@@ -77,8 +67,6 @@ is just `t - s`, potentially with underflow -/
   exact t.prop.2
 
 omit deq in
-/-- The length of a list extraction using valid positions `s` and `t`
-is just `t - s`, potentially with underflow -/
 @[simp] theorem _root_.List.length_extract_nat' {w : List α} {s t : ℕ}
     (hs : s ≤ w.length) (ht : t ≤ w.length)
     : (w.extract s t).length = t - s :=
@@ -90,10 +78,8 @@ instance instZero : Zero (Icc 0 b) := ⟨0, ⟨le_refl 0, Nat.zero_le b⟩⟩
 
 @[simp] theorem zero_val : (0 : Icc 0 b).val = 0 := rfl
 
-/-- Turns `s` into a value bounded by itself and `b` -/
 def iccFrom (s : Icc a b) : IccFrom s := ⟨s.val, ⟨le_refl s.val, s.is_le⟩⟩
 
-/-- Turns `s` into a value bounded by `a` and itself -/
 def iccTo (s : Icc a b) : IccTo s := ⟨s.val, ⟨s.is_ge, le_refl s.val⟩⟩
 
 @[simp] theorem iccFrom_val (s : Icc a b) : s.iccFrom.val = s.val := rfl
@@ -107,19 +93,15 @@ theorem ne_of_lt_of_mem_iccFrom {s t : Icc a b} (t' : IccFrom s) (ht : t.val < s
   contrapose! ht
   exact le_of_mem_iccFrom ht
 
-/-- Expands the bounds of `s` -/
 def expand (s : Icc a b) {a' b' : ℕ} (ha : a' ≤ a) (hb : b ≤ b') : Icc a' b' :=
   ⟨s.val, ⟨le_trans ha s.is_ge, le_trans s.is_le hb⟩⟩
 
-/-- Expands the lower bound of `s` -/
 def expandLeft (s : Icc a b) {a' : ℕ} (ha : a' ≤ a) : Icc a' b :=
   s.expand ha (le_refl b)
 
-/-- Expands the upper bound of `s` -/
 def expandRight (s : Icc a b) {b' : ℕ} (hb : b ≤ b') : Icc a b' :=
   s.expand (le_refl a) hb
 
-/-- Expands the lower bound of `s` to 0 -/
 def expandZero (s : Icc a b) : Icc 0 b := s.expandLeft (Nat.zero_le a)
 
 @[simp] theorem expand_val (s : Icc a b) {a' b' : ℕ} (ha : a' ≤ a) (hb : b ≤ b')
@@ -139,10 +121,8 @@ def expandZero (s : Icc a b) : Icc 0 b := s.expandLeft (Nat.zero_le a)
 @[simp] theorem iccFrom_expandZero (s : Icc a b)
     : IccFrom s.expandZero = IccFrom s := rfl
 
-/-- Use `s` to expand the lower bound of `s'` to the lower bound of `s` -/
 def widenLeft {s : Icc a b} (s' : IccFrom s) : Icc a b := s'.expandLeft s.is_ge
 
-/-- Use `s` to expand the upper bound of `s'` to the upper bound of `s` -/
 def widenRight {s : Icc a b} (s' : IccTo s) : Icc a b := s'.expandRight s.is_le
 
 def widenLeft' {s : Icc a b} (s' : IccFrom s) (a' : IccTo s) : Icc a'.val b :=
@@ -207,32 +187,26 @@ theorem extract_fst_eq (s : Pos w) (t t' : IccFrom s) (a : IccTo s) (b : IccFrom
 --  ext
 --  simp [← val_inj, eqRec_eq_cast]
 
-/-- The lower bound -/
 def start (s : Icc a b) : Icc a b := ⟨a, ⟨le_refl a, le_trans s.is_ge s.is_le⟩⟩
 
-/-- The upper bound -/
 def end' (s : Icc a b) : Icc a b := ⟨b, ⟨le_trans s.is_ge s.is_le, le_refl b⟩⟩
 
 @[simp] theorem start_val (s : Icc a b) : s.start.val = a := rfl
 @[simp] theorem end'_val (s : Icc a b) : s.end'.val = b := rfl
 
-@[simp] theorem start_eq {s : Icc a b} (t : Icc a b) : s.start = t.start := rfl
-@[simp] theorem end'_eq {s : Icc a b} (t : Icc a b) : s.end' = t.end' := rfl
-
 theorem start_le (s t : Icc a b) : t.start ≤ s := s.is_ge
 theorem le_end' (s t : Icc a b) : s ≤ t.end' := s.is_le
 
-/-- Distance to the upper bound -/
 def distToEnd (s : Icc a b) := s.end'.val - s.val
 
-theorem distToEnd_lt {s t : Icc a b} : s < t ↔ distToEnd t < distToEnd s := by
+theorem distToEnd_lt (s t : Icc a b) : s < t ↔ distToEnd t < distToEnd s := by
   have leend := t.is_le
   simp only [distToEnd, val_lt_val, end']
   omega
 
-theorem distToEnd_le {s t : Icc a b} : s ≤ t ↔ distToEnd t ≤ distToEnd s := by
+theorem distToEnd_le (s t : Icc a b) : s ≤ t ↔ distToEnd t ≤ distToEnd s := by
   rw [← not_lt, ← not_lt, not_iff_not]
-  exact distToEnd_lt
+  exact distToEnd_lt _ _
 
 omit deq
 theorem zero_end' : w = [] ↔ (0 : Pos w) = (0 : Pos w).end' := by
@@ -246,7 +220,6 @@ theorem zero_end' : w = [] ↔ (0 : Pos w) = (0 : Pos w).end' := by
 --    exact Nat.add_one_le_of_lt hs
 --  ⟩⟩
 
-/-- Use the fact that an item exists at `w[s]` to provably add 1 to `s` -/
 def succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c) : Pos w :=
   ⟨s.val + 1, ⟨Nat.zero_le _, by
     rw [List.getElem?_eq_some_iff] at hs
@@ -267,8 +240,6 @@ omit deq in
 --    exact Nat.add_le_of_le_sub' s.is_le tle
 --  ⟩⟩
 
-/-- Use the fact that the subsequence at position `s` with length `t`
-actually has length `t` to provably add `t` to `s` -/
 def addOfIndex {s : Pos w} {t : ℕ} {cs : List α}
     (ex : w.extract s.val (s.val + t) = cs) (hcs : cs.length = t) : Pos w :=
   ⟨s.val + t, ⟨Nat.zero_le _, by
@@ -424,13 +395,9 @@ def Capture (w : List α) := List (Pos w × Pos w) deriving DecidableEq, Repr
 instance Capture.instZero : Zero (Capture w) where
   zero := []
 
-/-- A map from "names" (actually natural numbers) to captures -/
 def Captures (w : List α) := ℕ →₀ Capture w deriving Zero, DFunLike
 
 namespace Captures
-
-omit deq in
-@[simp] theorem zero_get {w : List α} {n : ℕ} : (0 : Captures w) n = [] := by rfl
 
 /-- Turns this into a list of (index, capture) pairs -/
 def toList (cs : Captures w) : List (ℕ × Capture w) :=
@@ -465,7 +432,6 @@ theorem length_extract_pos_posFrom (s : Pos w) (s' : IccFrom s)
   rw [List.length_drop]
   apply Nat.sub_le_sub_right s'.is_le
 
-/-- A list of partial matches ((pos × captures) pairs) -/
 @[reducible] def PartialMatches (w : List α) := List (Pos w × Captures w)
   deriving Repr
 

@@ -84,7 +84,6 @@ def depth {α : Type*} (r : Regex α) : ℕ := match r with
   | capture _ r => r.depth + 1
   | backref _ _ => 0
 
-/-- A regex that matches a sequence -/
 def list {α : Type*} (w : List α) : Regex α := match w with
   | [] => empty
   | a :: as => concat (unit a) (list as)
