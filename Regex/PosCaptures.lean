@@ -200,6 +200,24 @@ theorem extract_fst_eq (s : Pos w) (t t' : IccFrom s) (a : IccTo s) (b : IccFrom
     (hb : t'.val ≤ b.val)
     : (s.extract t a b).fst = (s.extract t' a ⟨b.val, ⟨hb, b.is_le⟩⟩).fst := by rfl
 
+/-- Given a subinterval `s, t`, computes the new subinterval `s', t'`
+in word `wa ++ w ++ wb` that exactly contains `w` -/
+def recycle (s : Pos w) (t : Pos w) (wa wb : List α)
+    : Pos (wa ++ w.extract s.val t.val ++ wb) ×
+      Pos (wa ++ w.extract s.val t.val ++ wb) :=
+  ⟨⟨wa.length, ⟨Nat.zero_le _, by simp⟩⟩,
+  ⟨wa.length + (t.val - s.val), ⟨Nat.zero_le _, by
+    rw [List.length_append, List.length_append, List.length_extract_icc']
+    simp⟩⟩⟩
+
+omit deq in
+@[simp] theorem recycle_fst_val {s : Pos w} {t : Pos w} {wa wb : List α}
+    : (s.recycle t wa wb).fst.val = wa.length := rfl
+
+omit deq in
+@[simp] theorem recycle_snd_val {s : Pos w} {t : Pos w} {wa wb : List α}
+    : (s.recycle t wa wb).snd.val = wa.length + (t.val - s.val) := rfl
+
 --theorem extract_eq {s : Pos w} {t t' : IccFrom s} {a a' : IccTo s}
 --    {b : IccFrom t} {b' : IccFrom t'}
 --    (ht : t.val = t'.val) (ha : a.val = a'.val) (hb : b.val = b'.val)
@@ -238,6 +256,13 @@ omit deq
 theorem zero_end' : w = [] ↔ (0 : Pos w) = (0 : Pos w).end' := by
   rw [← Subtype.val_inj, zero_val, end'_val, (eq_comm : 0 = w.length ↔ _)]
   exact Iff.symm List.length_eq_zero_iff
+
+def strongRecEnd {motive : Icc a b → Sort u}
+    (ind : ∀ s, (∀ s', s < s' → motive s') → motive s) (s : Icc a b)
+    : motive s :=
+  ind s fun t _lt ↦ strongRecEnd ind t
+termination_by s.distToEnd
+decreasing_by exact distToEnd_lt.mp _lt
 
 --def succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c) : IccFrom s :=
 --  ⟨s.val + 1, ⟨Nat.le_add_right s.val 1, by

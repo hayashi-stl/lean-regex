@@ -1,4 +1,5 @@
 import Regex.Basic
+import Regex.Lemmas
 
 variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 
@@ -6,68 +7,68 @@ namespace Regex
 
 /-- Whether a language is truly regular or just a faker. This is
 why it's good to separate `Regex` from `RegularExpression`. -/
-def isRegular (r : Regex α) := ∃ r' : RegularExpression α, r.language = r'.matches'
+def isRegular (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
+  := ∃ r' : RegularExpression α, r.language term = r'.matches'
 
-/-- A description of regular languages by which
-features a regex is allowed to contain -/
-inductive limitRegular : Regex α → Prop where
-  | bot : limitRegular bot
-  | empty : limitRegular empty
-  | unit c : limitRegular (unit c)
-  | concat q r : limitRegular q → limitRegular r → limitRegular (concat q r)
-  | or q r : limitRegular q → limitRegular r → limitRegular (or q r)
-  | star t r : limitRegular r → limitRegular (star t r)
-  | capture n r : limitRegular r → limitRegular (capture n r)
-  -- note: no backref!
+/-- The classic regular expression operators -/
+inductive classRegular : Regex α → Prop where
+  | bot : classRegular bot
+  | empty : classRegular empty
+  | unit c : classRegular (unit c)
+  | concat q r : classRegular q → classRegular r → classRegular (concat q r)
+  | or q r : classRegular q → classRegular r → classRegular (or q r)
+  | star t r : classRegular r → classRegular (star t r)
 
 section MatchPartialShrink
 
 variable {s : Pos w} {cap : Captures w} {t : IccFrom s} {a : IccTo s} {b : IccFrom t}
 
-/-- A regex where `partialMatch` is basically equivalent to matching
-just a part of the sequence. Information like captures is irrelevant. -/
-def matchPartialShrink (r : Regex α) :=
-  ∀ (w : List α) (s : Pos w) (cap : Captures w) (t : IccFrom s)
-      (a : IccTo s) (b : IccFrom t) (capₑ : Captures (w.extract a.val b.val)),
-    t ∈ (r.matchPartial w s cap).map Prod.fst ↔
-    (s.extract t a b).2 ∈
-      (r.matchPartial (w.extract a.val b.val) (s.extract t a b).1 capₑ).map Prod.fst
+/-- A regex where `partialMatch` does not care about outside context
+like captures -/
+def MatchPartialFree (r : Regex α) :=
+  ∀ {w : List α} {s : Pos w} {cap : Captures w}
+      {term : r.Terminates w s cap} {t : Pos w},
+      t ∈ (r.matchPartial w s cap term).map Prod.fst →
+    ∀ (wa : List α) (wb : List α) (cap₁ : Captures (wa ++ w.extract s.val t.val ++ wb))
+      (term₁ : r.Terminates (wa ++ w.extract s.val t.val ++ wb) (s.recycle t wa wb).1 cap₁),
+    (s.recycle t wa wb).2 ∈
+      (r.matchPartial (wa ++ w.extract s.val t.val ++ wb)
+        (s.recycle t wa wb).1 cap₁ term₁).map Prod.fst
 
-theorem matchPartialIsMatch_bot
-    : matchPartialShrink ([/⊥/] : Regex α) := by
-  simp [matchPartialShrink, matchPartial_bot]
+theorem matchPartialFree_bot : MatchPartialFree ([/⊥/] : Regex α) := by
+  simp [MatchPartialFree, matchPartial_bot]
 
-theorem matchPartialIsMatch_empty
-    : matchPartialShrink ([//] : Regex α) := by
-  simp only [matchPartialShrink, List.extract_eq_drop_take, matchPartial_empty,
-    List.map_cons, List.map_nil, List.mem_cons, List.not_mem_nil, or_false, forall_const]
-  simp only [← Icc.val_inj, Icc.iccFrom_val, Icc.extract_fst_val, Icc.extract_snd_val]
-  intro w s t a b
-  rw [Nat.sub_eq_iff_eq_add (le_trans a.is_le t.is_ge)]
-  rw [Nat.sub_add_cancel a.is_le]
+theorem matchPartialFree_empty : MatchPartialFree ([//] : Regex α) := by
+  simp only [MatchPartialFree, matchPartial_empty, List.map_cons, List.map_nil, List.mem_cons,
+    ← Icc.val_inj, List.not_mem_nil, or_false, List.extract_eq_drop_take, Icc.recycle_snd_val,
+    Icc.recycle_fst_val, Nat.add_eq_left]
+  intro w s cap term t teq
+  simp [teq]
 
-theorem matchPartialIsMatch_unit (c : α)
-    : matchPartialShrink [/c/] := by
-  simp only [matchPartialShrink, List.extract_eq_drop_take, matchPartial, List.pure_def,
-    List.mem_map, Prod.exists, exists_and_right, exists_eq_right, Icc.extract_fst_val]
-  intro w s cap t a b capₛ
-  split_ifs <;> simp only [List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false,
-    exists_eq_right, failure, exists_const, iff_false, Prod.mk.injEq, false_iff,
-    ← Icc.val_inj, Icc.extract_fst_val, Icc.extract_snd_val, Icc.succOfIndex_val]
-  · rw [Nat.sub_eq_iff_eq_add (le_trans a.is_le t.is_ge), Nat.add_right_comm]
-    rw [Nat.sub_add_cancel a.is_le]
-  case' pos => rename_i wsc' wsc
-  case' neg => rename_i wsc wsc'
-  all_goals (
-    contrapose! wsc'
-    rw [← wsc, List.getElem?_take_of_lt, List.getElem?_drop, Nat.add_sub_cancel' a.is_le]
-    apply Nat.sub_lt_sub_right a.is_le
-    simp only [Nat.lt_iff_add_one_le]
-  )
-  · simp only [← wsc']; exact b.is_ge
-  · rw [Nat.sub_eq_iff_eq_add (le_trans a.is_le t.is_ge),
-      Nat.add_right_comm, Nat.sub_add_cancel a.is_le] at wsc'
-    simp only [← wsc']; exact b.is_ge
+theorem matchPartialFree_unit (c : α) : MatchPartialFree [/c/] := by
+  simp only [MatchPartialFree, matchPartial_unit, List.mem_map, List.mem_dite_nil_right,
+    List.mem_cons, List.not_mem_nil, or_false, ← Icc.val_inj, Prod.exists, Prod.mk.injEq,
+    Icc.succOfIndex_val, exists_and_left, exists_prop, exists_and_right, ↓existsAndEq, and_true,
+    List.extract_eq_drop_take, List.append_assoc, Icc.recycle_fst_val, Icc.recycle_snd_val,
+    forall_exists_index, and_imp]
+  intro w s cap term t s' s'add wsc s't wa wb cap₁ term₁
+  have ⟨lt, wsc⟩ := List.getElem?_eq_some_iff.mp wsc
+  have one : 1 ≤ w.length - s.val := by
+    by_contra!
+    rw [Nat.lt_one_iff, Nat.sub_eq_zero_iff_le] at this
+    exact not_le.mpr lt this
+  use ⟨wa.length + 1, by simp [← s't, s'add, min_eq_left_iff.mpr one]⟩
+  suffices (if s.val < w.length then w[s.val]? else wb[0]?) = some c by
+    simpa [← s't, s'add, List.getElem?_append]
+  rw [Nat.le_sub_iff_add_le' s.is_le, ← Nat.lt_iff_add_one_le] at one
+  simp [one, wsc]
+
+theorem matchPartialFree_concat (q r : Regex α) (qf : q.MatchPartialFree)
+    (rf : r.MatchPartialFree)
+    : [/⟨q⟩ ⟨r⟩/].MatchPartialFree := by
+  simp? [MatchPartialFree, matchPartial_concat] at qf rf ⊢
+  --intro w s cap term t mem wa wb cap₁ term₁
+  --rcases mem with ⟨mat, qmem, rmem⟩
 
 theorem exists_congr' {α β : Type*} {p : α → Prop} {q : β → Prop} (f : α → β)
     : (∀ a : α, p a ↔ q (f a)) → (∀ b : β, (∀ a : α, f a ≠ b) → ¬q b) →
@@ -267,7 +268,7 @@ def sndErasing {α β γ : Type*} (f : α × β → γ) := ∀ a b₁ b₂, f (a
 
 /-- Captures are irrelevant to the internal behavior of `matchPartial` in
 regular regexes. -/
-theorem limitRegular_matchPartial_eraseCaptures (rlim : limitRegular r)
+theorem limitRegular_matchPartial_eraseCaptures (rlim : classRegular r)
     (w : List α) (s : Pos w)
     : ∀ {β : Type*} (f : _ → β), sndErasing f → ∀ c₁ c₂,
       (r.matchPartial w s c₁).map f =
@@ -328,7 +329,7 @@ theorem limitRegular_matchPartial_eraseCaptures (rlim : limitRegular r)
 
 /-- If the regex is actually regular, `isMatch` on `concat`
 and `star` behave nicely -/
-theorem limitRegular_isMatch_concat_star (rlim : limitRegular r) (w : List α)
+theorem limitRegular_isMatch_concat_star (rlim : classRegular r) (w : List α)
     : match r with
       | concat p q => isMatch r w ↔ ∃ s : Pos w,
           isMatch p (w.take s.val) ∧ isMatch q (w.drop s.val)
@@ -350,7 +351,7 @@ theorem limitRegular_isMatch_concat_star (rlim : limitRegular r) (w : List α)
   --    reduceCtorEq, IsEmpty.forall_iff, implies_true, and_true]
   --  intro w
 
-theorem isRegular_limitRegular : limitRegular r → isRegular r := by
+theorem isRegular_limitRegular : classRegular r → isRegular r := by
   intro lim
   induction lim
   · use 0
