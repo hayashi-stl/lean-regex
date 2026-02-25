@@ -18,7 +18,7 @@ inductive classTerminates : Regex α → Prop where
   | capture n r : classTerminates r → classTerminates (capture n r)
   | backref d n : classTerminates (backref d n)
 
-/-- Rexeges constructed out of just ones in `classTerminates` terminate -/
+/-- Rexeges constructed out of just ones in `classTerminates` always terminate -/
 theorem classTerminates_terminates (r : Regex α) (hr : r.classTerminates)
     : ∀ w s cap, r.Terminates w s cap := by
   induction hr with

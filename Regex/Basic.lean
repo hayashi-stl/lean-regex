@@ -436,6 +436,17 @@ theorem matchPartial_star_lazy_terminates' {r : Regex α} {s : Pos w}
       [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*?)/].Terminates w s cap := by
   simp only [Terminates, initMatchPartial]; conv_lhs => step
 
+theorem star_terminates' {t : StarType} {r : Regex α} {s : Pos w}
+    {cap : Captures w}
+    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ match t with
+      | .greedy => [/(⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*) | ε/].Terminates w s cap
+      | .lazy => [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*?)/].Terminates w s cap := by
+  rw [Terminates, initMatchPartial]
+  step
+  cases t with
+  | greedy => simp only [Terminates, initMatchPartial]
+  | lazy => simp only [Terminates, initMatchPartial]
+
 /-- `star t r` terminates iff `r` terminates and `r` terminates for every
 advancing end position and match provided by `r` -/
 theorem star_terminates {t : StarType} {r : Regex α} {s : Pos w}

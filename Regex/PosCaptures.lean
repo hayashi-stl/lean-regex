@@ -200,23 +200,29 @@ theorem extract_fst_eq (s : Pos w) (t t' : IccFrom s) (a : IccTo s) (b : IccFrom
     (hb : t'.val ≤ b.val)
     : (s.extract t a b).fst = (s.extract t' a ⟨b.val, ⟨hb, b.is_le⟩⟩).fst := by rfl
 
-/-- Given a subinterval `s, t`, computes the new subinterval `s', t'`
-in word `wa ++ w ++ wb` that exactly contains `w` -/
-def recycle (s : Pos w) (t : Pos w) (wa wb : List α)
-    : Pos (wa ++ w.extract s.val t.val ++ wb) ×
-      Pos (wa ++ w.extract s.val t.val ++ wb) :=
-  ⟨⟨wa.length, ⟨Nat.zero_le _, by simp⟩⟩,
-  ⟨wa.length + (t.val - s.val), ⟨Nat.zero_le _, by
-    rw [List.length_append, List.length_append, List.length_extract_icc']
-    simp⟩⟩⟩
+--/-- Given a subinterval `s, t`, computes the new subinterval `s', t'`
+--in word `wa ++ w ++ wb` that exactly contains `w` -/
+--def recycle (s : Pos w) (t : Pos w) (wa wb : List α)
+--    : Pos (wa ++ w.extract s.val t.val ++ wb) ×
+--      Pos (wa ++ w.extract s.val t.val ++ wb) :=
+--  ⟨⟨wa.length, ⟨Nat.zero_le _, by simp⟩⟩,
+--  ⟨wa.length + (t.val - s.val), ⟨Nat.zero_le _, by
+--    rw [List.length_append, List.length_append, List.length_extract_icc']
+--    simp⟩⟩⟩
+
+/-- Given a position `s` in a subinterval `a, b`, computes the new position `s'`
+in word `wa ++ w.extract a b ++ wb` with the corresponding position -/
+def recycle (s a b : Pos w) (hb : s ≤ b) (wa wb : List α)
+    : Pos (wa ++ w.extract a.val b.val ++ wb) :=
+  ⟨wa.length + (s.val - a.val), ⟨Nat.zero_le _, by
+      rw [List.length_append, List.length_append, List.length_extract_icc', add_assoc]
+      refine Nat.add_le_add_left (Nat.le_add_right_of_le ?_) wa.length
+      apply Nat.sub_le_sub_right (val_le_val.mp hb)
+    ⟩⟩
 
 omit deq in
-@[simp] theorem recycle_fst_val {s : Pos w} {t : Pos w} {wa wb : List α}
-    : (s.recycle t wa wb).fst.val = wa.length := rfl
-
-omit deq in
-@[simp] theorem recycle_snd_val {s : Pos w} {t : Pos w} {wa wb : List α}
-    : (s.recycle t wa wb).snd.val = wa.length + (t.val - s.val) := rfl
+@[simp] theorem recycle_val {s a b : Pos w} {hb : s ≤ b} {wa wb : List α}
+    : (s.recycle a b hb wa wb).val = wa.length + (s.val - a.val) := rfl
 
 --theorem extract_eq {s : Pos w} {t t' : IccFrom s} {a a' : IccTo s}
 --    {b : IccFrom t} {b' : IccFrom t'}
@@ -311,6 +317,107 @@ omit deq in
 end Icc
 
 --theorem List.getElem?_extract_lt (w : List α) (s : Pos w) (t : IccFrom s)
+
+end Icc
+
+omit deq in
+/-- Pasting two extracts together where the second one starts where the
+first one ends -/
+@[simp] theorem _root_.List.extract_append_extract' {s t u : ℕ}
+    (hs : s ≤ t) (ht : t ≤ u) (hu : u ≤ w.length)
+    : w.extract s t ++ w.extract t u = w.extract s u := by
+  simp only [List.extract_eq_drop_take]
+  rw (occs := [1, 3]) [← List.take_append_drop u w]
+  rw [List.drop_append]
+  rw [List.take_append_of_le_length ?st, List.take_append_of_le_length ?su];
+  case st | su =>
+    simp only [List.length_drop, List.length_take, tsub_le_iff_right, min_eq_left_iff.mpr hu]
+    rw [Nat.sub_add_cancel] <;> first | exact le_refl _ | assumption | exact .trans hs ht
+  rw [List.take_drop (i := u - t), List.drop_take, ← List.extract_eq_drop_take,
+    Nat.add_sub_cancel' ht]
+  rw (occs := [2]) [← List.take_append_drop s w]
+  rw [List.take_append, List.take_take (i := u), min_eq_right_iff.mpr (.trans hs ht),
+    List.length_take, min_eq_left_iff.mpr (.trans hs <| .trans ht hu),
+    List.drop_append, List.drop_eq_nil_iff.mpr]; rotate_right
+  · simp only [List.length_take, inf_le_iff]; exact Or.inl hs
+  simp only [List.extract_eq_drop_take, List.length_take, List.nil_append,
+    min_eq_left_iff.mpr (.trans hs <| .trans ht hu)]
+  rw [← List.extract_eq_drop_take, List.take_append_drop]
+  simp
+
+omit deq in
+@[simp] theorem _root_.List.extract_append_extract {s t u : Pos w}
+    (hs : s ≤ t) (ht : t ≤ u) :
+    w.extract s.val t.val ++ w.extract t.val u.val = w.extract s.val u.val :=
+  List.extract_append_extract' (Icc.val_le_val.mp hs) (Icc.val_le_val.mp ht) u.is_le
+
+omit deq in
+theorem _root_.List.extract_append_extract_assoc_right {s t u : Pos w}
+    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
+    : wa ++ w.extract s.val t.val ++ (w.extract t.val u.val ++ wb) =
+      wa ++ w.extract s.val u.val ++ wb := by
+  rw [← List.append_assoc, List.append_assoc wa, List.extract_append_extract hs ht]
+
+omit deq in
+theorem _root_.List.extract_append_extract_assoc_left {s t u : Pos w}
+    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
+    : (wa ++ w.extract s.val t.val) ++ w.extract t.val u.val ++ wb =
+      wa ++ w.extract s.val u.val ++ wb := by
+  rw [List.append_assoc wa, List.extract_append_extract hs ht]
+
+namespace Icc
+
+omit deq in
+theorem recycle_extract_append_right {s t a b : Pos w} (as : a ≤ s) (st : s ≤ t)
+    (tb : t ≤ b) (wa wb : List α)
+    : s.recycle a t st wa (w.extract t.val b.val ++ wb) =
+    List.extract_append_extract_assoc_right (.trans as st) tb wa wb ▸
+      s.recycle a b (.trans st tb) wa wb := by
+  rw [eqRec_eq_cast, eq_comm, cast_eq_iff_heq, Subtype.heq_iff_coe_eq]
+  · simp
+  simp [List.extract_append_extract_assoc_right (.trans as st) tb]
+
+omit deq in
+theorem recycle_extract_append_left {s t a b : Pos w} (at' : a ≤ t) (ts : t ≤ s)
+    (sb : s ≤ b) (wa wb : List α)
+    : s.recycle t b sb (wa ++ w.extract a.val t.val) wb =
+    List.extract_append_extract_assoc_left at' (.trans ts sb) wa wb ▸
+      s.recycle a b sb wa wb := by
+  rw [eqRec_eq_cast, eq_comm, cast_eq_iff_heq, Subtype.heq_iff_coe_eq]
+  · simp only [List.extract_eq_drop_take, recycle_val, List.length_append, List.length_take,
+      List.length_drop]
+    rw [add_assoc, Nat.add_right_inj, min_eq_left_iff.mpr (Nat.sub_le_sub_right t.is_le _)]
+    rw [add_comm, Nat.sub_add_sub_cancel ts at']
+  rw [List.extract_append_extract_assoc_left at' (.trans ts sb)]
+  simp
+
+--omit deq in
+--theorem recycle_extract_append' {s t a b : Pos w} (as : a ≤ s) (st : s ≤ t)
+--    (tb : t ≤ b) (wa wb : List α)
+--    : List.extract_append_extract_assoc (.trans as st) tb wa wb ▸
+--        s.recycle a t st wa (w.extract t.val b.val ++ wb) =
+--      s.recycle a b (.trans st tb) wa wb := by
+--  rw [eqRec_eq_cast, cast_eq_iff_heq, Subtype.heq_iff_coe_eq]
+--  · simp
+--  simp [List.extract_append_extract_assoc (.trans as st) tb]
+
+--omit deq in
+--theorem recycle_extract_append_fst {s t u : Pos w} (hs : s ≤ t) (ht : t ≤ u)
+--    (wa wb : List α)
+--    : (s.recycle t wa (w.extract t.val u.val ++ wb)).1 =
+--    List.extract_append_extract_assoc hs ht wa wb ▸ (s.recycle u wa wb).1 := by
+--  rw [eqRec_eq_cast, eq_comm, cast_eq_iff_heq, Subtype.heq_iff_coe_eq]
+--  · simp
+--  simp [List.extract_append_extract_assoc hs ht]
+--
+--omit deq in
+--theorem recycle_extract_append_snd {s t u : Pos w} (hs : s ≤ t) (ht : t ≤ u)
+--    (wa wb : List α)
+--    : (s.recycle t wa (w.extract t.val u.val ++ wb)).2 =
+--    List.extract_append_extract_assoc hs ht wa wb ▸ (s.recycle u wa wb).2 := by
+--  rw [eqRec_eq_cast, eq_comm, cast_eq_iff_heq, Subtype.heq_iff_coe_eq]
+--  · simp
+--  simp [List.extract_append_extract_assoc hs ht]
 
 end Icc
 

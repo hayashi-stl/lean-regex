@@ -10,7 +10,7 @@ variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 Ideally this will be true for all regexes. -/
 def Monotone (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
     (term : r.Terminates w s cap) :=
-    ∀ t ∈ (r.matchPartial w s cap term).map Prod.fst, s ≤ t
+    ∀ {s'} {cap'}, (s', cap') ∈ r.matchPartial w s cap term → s ≤ s'
 
 theorem monotone_bot : [/⊥/].Monotone w s cap bot_terminates := by
   simp [Monotone, matchPartial_bot]
@@ -19,10 +19,9 @@ theorem monotone_empty : [//].Monotone w s cap empty_terminates := by
   simp [Monotone, matchPartial_empty]
 
 theorem monotone_unit {c : α} : [/c/].Monotone w s cap unit_terminates := by
-  simp only [Monotone, matchPartial_unit, List.mem_map, List.mem_dite_nil_right,
-    List.mem_cons, List.not_mem_nil, or_false, ← Icc.val_inj, Prod.exists,
-    Prod.mk.injEq, Icc.succOfIndex_val, exists_and_left, exists_prop, exists_and_right,
-    ↓existsAndEq, and_true, forall_exists_index, and_imp]
+  simp only [Monotone, matchPartial_unit, List.mem_dite_nil_right,
+    List.mem_cons, List.not_mem_nil, or_false, ← Icc.val_inj,
+    Prod.mk.injEq, Icc.succOfIndex_val, exists_and_left, exists_prop, and_imp]
   intro t s' hs' _
   rw [Icc.val_le_val, hs']
   intro _
@@ -33,26 +32,24 @@ theorem monotone_concat {q r : Regex α} {term : [/⟨q⟩ ⟨r⟩/].Terminates 
     (rm : ∀ mat (mem : mat ∈ q.matchPartial w s cap (concat_terminates.mp term).1),
       r.Monotone w mat.1 mat.2 ((concat_terminates.mp term).2 mat mem))
     : [/⟨q⟩ ⟨r⟩/].Monotone w s cap term := by
-  simp only [Monotone, List.mem_map, Prod.exists, exists_and_right, exists_eq_right,
-    forall_exists_index, Prod.forall, matchPartial_concat, List.map_flatten,
-    List.mem_flatten, List.mem_pmap, ↓existsAndEq, true_and] at qm rm ⊢
-  exact fun s'' s' cap' qmem cap'' rmem ↦ .trans (qm _ _ qmem) (rm _ _ qmem _ _ rmem)
+  simp only [Monotone, matchPartial_concat, List.mem_flatten, List.mem_pmap, Prod.exists,
+    ↓existsAndEq, true_and, forall_exists_index]
+  exact fun s' cap' qmem rmem ↦ .trans (qm qmem) (rm _ qmem rmem)
 
 theorem monotone_or {q r : Regex α} {term : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap}
     (qm : q.Monotone w s cap (or_terminates.mp term).1)
     (rm : r.Monotone w s cap (or_terminates.mp term).2)
     : [/⟨q⟩ | ⟨r⟩/].Monotone w s cap term := by
-  simp only [Monotone, matchPartial_or, List.map_append, List.mem_append]
-  exact fun s' mem ↦ Or.casesOn mem (fun qmem ↦ qm _ qmem) (fun rmem ↦ rm _ rmem)
+  simp only [Monotone, matchPartial_or, List.mem_append]
+  exact fun mem ↦ Or.casesOn mem (fun qmem ↦ qm qmem) (fun rmem ↦ rm rmem)
 
 theorem monotone_filterEmpty {e : Bool} {r : Regex α}
     {term : [/⟨r⟩ ‹e›ε/].Terminates w s cap}
     (rm : r.Monotone w s cap (filterEmpty_terminates.mp term))
     : [/⟨r⟩ ‹e›ε/].Monotone w s cap term := by
   simp only [Monotone, matchPartial_filterEmpty, ge_iff_le, eq_iff_iff, Bool.decide_iff_dist,
-    Bool.decide_eq_true, List.mem_map, List.mem_filter, beq_iff_eq, Prod.exists, exists_and_right,
-    exists_eq_right, forall_exists_index, and_imp] at rm ⊢
-  exact fun s' _ mem _ ↦ rm _ _ mem
+    Bool.decide_eq_true, List.mem_filter, beq_iff_eq, and_imp] at rm ⊢
+  exact fun mem _ ↦ rm mem
 
 theorem monotone_star {t : StarType} {r : Regex α} {term : [/⟨r⟩*‹t›/].Terminates w s cap}
     (rm : r.Monotone w s cap (star_terminates.mp term).1)
@@ -60,8 +57,7 @@ theorem monotone_star {t : StarType} {r : Regex α} {term : [/⟨r⟩*‹t›/].
       (slt : s < mat.1),
       [/⟨r⟩*‹t›/].Monotone w mat.1 mat.2 ((star_terminates.mp term).2 mat mem slt))
     : [/⟨r⟩*‹t›/].Monotone w s cap term := by
-  simp only [Monotone, List.mem_map, Prod.exists, exists_and_right, exists_eq_right,
-    forall_exists_index, Prod.forall] at rm rm' ⊢
+  simp only [Monotone, Prod.forall] at rm rm' ⊢
   simp only [matchPartial_star]
   cases t
   case greedy | lazy =>
@@ -73,22 +69,22 @@ theorem monotone_star {t : StarType} {r : Regex α} {term : [/⟨r⟩*‹t›/].
     intro s'' cap'' or
     try rw [or_comm (a := _ ∧ cap'' = _), or_assoc] at or
     rcases or with mem | ⟨s', cap', rmem, r'mem⟩ | mem
-    · exact rm _ _ mem.1
-    · exact .trans (rm _ _ rmem.1) (rm' _ _ rmem.1 rmem.2 _ _ r'mem)
+    · exact rm mem.1
+    · exact .trans (rm rmem.1) (rm' _ _ rmem.1 rmem.2 r'mem)
     · exact mem.1 ▸ le_refl _
 
 theorem monotone_start : [/⊢/].Monotone w s cap start_terminates := by
-  simp [Monotone, matchPartial_start]
+  exact fun mem ↦ by simp [matchPartial_start] at mem; simp [mem.2]
 
 theorem monotone_end' : [/⊣/].Monotone w s cap end'_terminates := by
-  simp [Monotone, matchPartial_end']
+  exact fun mem ↦ by simp [matchPartial_end'] at mem; simp [mem.2]
 
 theorem monotone_capture {n : ℕ} {r : Regex α} {term : [/(‹n› ⟨r⟩)/].Terminates w s cap}
     (rm : r.Monotone w s cap (capture_terminates.mp term))
     : [/(‹n› ⟨r⟩)/].Monotone w s cap term := by
-  simp only [Monotone, List.mem_map, Prod.exists, exists_and_right, exists_eq_right,
-    forall_exists_index, matchPartial_capture, List.map_map, Function.comp_apply] at rm ⊢
-  exact rm
+  simp only [Monotone, matchPartial_capture, List.mem_map, Prod.mk.injEq, Prod.exists, ↓existsAndEq,
+    true_and, forall_exists_index, and_imp, forall_apply_eq_imp_iff₂]
+  exact fun cap ↦ rm
 
 --theorem monotone_list {l : List α}
 --    : (list l).Monotone w s cap list_terminates := by
@@ -102,14 +98,14 @@ theorem monotone_capture {n : ℕ} {r : Regex α} {term : [/(‹n› ⟨r⟩)/].
 theorem monotone_backref {d : BackrefDefault} {n : ℕ}
     : [/\‹d›n/].Monotone w s cap backref_terminates := by
   rw [Monotone, matchPartial_backref]
-  split
+  split <;> expose_names
   · split <;> simp
-  · simp only [List.extract_eq_drop_take, add_tsub_cancel_left, List.mem_map,
-      List.mem_dite_nil_right, List.mem_cons, List.not_mem_nil, or_false, Prod.exists,
-      Prod.mk.injEq, exists_and_right, ↓existsAndEq, and_true, exists_eq_right, forall_exists_index,
-      forall_eq_apply_imp_iff]
-    conv in _ ≤ _ => rw [Icc.val_le_val, Icc.addOfIndex_val]
-    simp
+  · simp only [List.extract_eq_drop_take, add_tsub_cancel_left, List.mem_dite_nil_right,
+      List.mem_cons, Prod.mk.injEq, ← Icc.val_inj, Icc.addOfIndex_val, List.not_mem_nil, or_false,
+      exists_and_left, exists_prop, and_imp]
+    intro _ _ s'eq _ _
+    rw [Icc.val_le_val]
+    simp [s'eq]
 
 theorem monotone : r.Monotone w s cap term := by
   revert term
@@ -121,9 +117,8 @@ theorem monotone : r.Monotone w s cap term := by
     | unit _ => exact monotone_unit
     | concat q r qind rind =>
       refine monotone_concat qind fun mat mem ↦ ?_
-      simp only [Monotone, List.mem_map, Prod.exists, exists_and_right,
-        exists_eq_right, forall_exists_index] at qind
-      rcases lt_or_eq_of_le (qind mat.1 mat.2 mem) with lt | eq
+      simp only [Monotone] at qind
+      rcases lt_or_eq_of_le (qind mem) with lt | eq
       · exact ind _ lt
       · rw! [← eq]; exact rind
     | or q r qind rind => exact monotone_or qind rind
