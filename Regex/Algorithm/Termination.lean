@@ -10,17 +10,17 @@ variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 
 namespace MatchStack
 
-def stepN (n : ℕ) (st : MatchStack w) : StepResult w
+def stepN (n : ℕ) (st : MatchStack α) : StepResult (MatchStack α)
   := match n with
   | 0 => Except.ok st
   | n + 1 => st.step >>= stepN n
 
-@[simp] theorem step0_eq_self : stepN (w := w) 0 = Except.ok := by rfl
+@[simp] theorem step0_eq_self : stepN (α := α) 0 = Except.ok := by rfl
 
-@[simp] theorem step1_eq_step : stepN (w := w) 1 = step := by
+@[simp] theorem step1_eq_step : stepN (α := α) 1 = step := by
   ext; rw [stepN, step0_eq_self, Except.ok_eq_pure, bind_pure]
 
-theorem stepN_step_eq_step_stepN {st : MatchStack w} {n : ℕ}
+theorem stepN_step_eq_step_stepN {st : MatchStack α} {n : ℕ}
     : st.stepN n >>= step = st.step >>= stepN n:= by
   induction n generalizing st with
   | zero =>
@@ -29,16 +29,16 @@ theorem stepN_step_eq_step_stepN {st : MatchStack w} {n : ℕ}
     simp only [stepN, bind_assoc]
     congr; ext x; exact ind
 
-theorem stepN_of_stepN_add_one {st : MatchStack w} {n : ℕ} {st'' : MatchStack w}
+theorem stepN_of_stepN_add_one {st : MatchStack α} {n : ℕ} {st'' : MatchStack α}
     (hst : st.stepN (n + 1) = Except.ok st'')
     : ∃ st', st.stepN n = Except.ok st' := by
   by_contra!
   obtain ⟨mat, eq⟩ := Except.eq_error_iff_forall_ne_ok.mp this
   rw [stepN, ← stepN_step_eq_step_stepN, eq] at hst
-  obtain eq' := Except.error_bind mat step
+  obtain eq' := Except.error_bind mat (step (α := α))
   simp [eq'] at hst
 
-theorem stepN_step_of_stepN_add_one {st : MatchStack w} {n : ℕ} {st'' : MatchStack w}
+theorem stepN_step_of_stepN_add_one {st : MatchStack α} {n : ℕ} {st'' : MatchStack α}
     (hst : st.stepN (n + 1) = Except.ok st'')
     : ∃ st', st.stepN n = Except.ok st' ∧ st'.step = Except.ok st'' := by
   have ⟨st', hst'⟩ := stepN_of_stepN_add_one hst
@@ -46,7 +46,7 @@ theorem stepN_step_of_stepN_add_one {st : MatchStack w} {n : ℕ} {st'' : MatchS
   rw [stepN, ← stepN_step_eq_step_stepN, hst', Except.ok_bind] at hst
   rwa [Except.ok_eq_pure]
 
-theorem stepN_add {st : MatchStack w} {m n : ℕ} {st'' : MatchStack w}
+theorem stepN_add {st : MatchStack α} {m n : ℕ} {st'' : MatchStack α}
     (hst : st.stepN (m + n) = Except.ok st'')
     : ∃ st', st.stepN m = Except.ok st' ∧ st'.stepN n = Except.ok st'' := by
   induction n generalizing st st'' with
@@ -61,30 +61,30 @@ theorem stepN_add {st : MatchStack w} {m n : ℕ} {st'' : MatchStack w}
     use st'_, hst'_
     rwa [stepN, ← stepN_step_eq_step_stepN, st'_eq]
 
-theorem stepN_add_eq_bind {st : MatchStack w} {m n : ℕ}
+theorem stepN_add_eq_bind {st : MatchStack α} {m n : ℕ}
     : st.stepN (m + n) = st.stepN m >>= stepN n := by
   induction m generalizing st with
   | zero => simp
   | succ m ind => rw [Nat.add_right_comm, stepN, stepN, bind_assoc]; simp [← ind]
 
-theorem step_stepN_of_stepN_add_one {st : MatchStack w} {n : ℕ} {st'' : MatchStack w}
+theorem step_stepN_of_stepN_add_one {st : MatchStack α} {n : ℕ} {st'' : MatchStack α}
     (hst : st.stepN (n + 1) = Except.ok st'')
     : ∃ st', st.step = Except.ok st' ∧ st'.stepN n = Except.ok st'' := by
   have add := stepN_add (add_comm n 1 ▸ hst); simp only [step1_eq_step] at add; exact add
 
-theorem stepN_step {st : MatchStack w} {n : ℕ} {st' : MatchStack w}
+theorem stepN_step {st : MatchStack α} {n : ℕ} {st' : MatchStack α}
     (hst : st.stepN n = Except.ok st') : st.stepN (n + 1) = st'.step := by
   rw [stepN, ← stepN_step_eq_step_stepN, hst, Except.ok_bind]
 
 /-- A stack terminates if it runs for a finite number of steps -/
-def Terminates (st : MatchStack w) :=
-  Acc (fun st'' st' : MatchStack w ↦ st'.step = Except.ok st'') st
+def Terminates (st : MatchStack α) :=
+  Acc (fun st'' st' : MatchStack α ↦ st'.step = Except.ok st'') st
 
 /-- The termination condition lifted to `StepResult` -/
-def Terminates' (st : StepResult w) :=
+def Terminates' (st : StepResult (MatchStack α)) :=
   match st with | Except.ok st => st.Terminates | Except.error _ => True
 
-theorem terminates_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches w}
+theorem terminates_of_stepN {st : MatchStack α} {n : ℕ} {mat : PartialMatches}
     (hst : st.stepN n = Except.error mat) : st.Terminates := by
   cases n with | zero => simp at hst | succ n => induction n generalizing st mat with
   | zero =>
@@ -104,7 +104,7 @@ theorem terminates_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches 
         rw [hst', Except.ok.injEq] at hst'_; exact hst'_ ▸ ind
     | error mat' => exact ind h
 
-theorem terminates_iff {st : MatchStack w}
+theorem terminates_iff {st : MatchStack α}
     : st.Terminates ↔ ∃ n mat, st.stepN n = Except.error mat := by
   constructor
   · intro term
@@ -119,10 +119,10 @@ theorem terminates_iff {st : MatchStack w}
   · simp only [forall_exists_index]
     exact fun n mat ↦ terminates_of_stepN
 
-theorem step_terminates {st st' : MatchStack w} (term : st.Terminates)
+theorem step_terminates {st st' : MatchStack α} (term : st.Terminates)
     (hst : st.step = Except.ok st') : st'.Terminates := Acc.inv term hst
 
-theorem stepN_terminates {st st' : MatchStack w} (term : st.Terminates) {n : ℕ}
+theorem stepN_terminates {st st' : MatchStack α} (term : st.Terminates) {n : ℕ}
     (hst : st.stepN n = Except.ok st') : st'.Terminates := by
   have ⟨n', mat, stepn⟩ := terminates_iff.mp term
   have lt : n < n' := by
@@ -134,7 +134,7 @@ theorem stepN_terminates {st st' : MatchStack w} (term : st.Terminates) {n : ℕ
   exact terminates_of_stepN stepn
 
 /-- A stack terminates iff it still terminates when stepped. -/
-theorem step_terminates_iff {st : MatchStack w}
+theorem step_terminates_iff {st : MatchStack α}
     : st.Terminates ↔ Terminates' st.step := by
   rw [Terminates'.eq_def]
   split <;> expose_names
@@ -147,7 +147,7 @@ theorem step_terminates_iff {st : MatchStack w}
   · constructor <;> simp only [implies_true, forall_const]
     rw [terminates_iff]; use 1, a; simpa
 
-theorem pop_top {st : MatchStack w} {as bs : List (Action w)}
+theorem pop_top {st : MatchStack α} {as bs : List (Action α)}
     (term : (mk as st.arg).Terminates) (hst : st.entries = as ++ bs)
     : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
       ∀ n' < n, ∀ st', st.stepN n' = Except.ok st' →
@@ -195,7 +195,7 @@ theorem pop_top {st : MatchStack w} {as bs : List (Action w)}
       simp only [emp, List.nil_eq, List.append_eq_nil_iff] at hst
       use 0, st; simp [*]
 
-theorem top_equiv {st : MatchStack w} {as bs : List (Action w)}
+theorem top_equiv {st : MatchStack α} {as bs : List (Action α)}
     (term : (mk as st.arg).Terminates) (hst : st.entries = as ++ bs)
     : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
       (mk as st.arg).stepN (n + 1) = Except.error st''.arg := by
@@ -233,7 +233,7 @@ theorem top_equiv {st : MatchStack w} {as bs : List (Action w)}
       simpa only [show (ac.process st.arg).arg = st'.arg by simp [st'eq]]
 
 /-- An older version of `pop_top` that assumes `st.Terminates` instead -/
-theorem pop_top' {st : MatchStack w} {as bs : List (Action w)}
+theorem pop_top' {st : MatchStack α} {as bs : List (Action α)}
     (term : st.Terminates) (hst : st.entries = as ++ bs)
     : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
       ∀ n' < n, ∀ st', st.stepN n' = Except.ok st' →
@@ -271,8 +271,8 @@ theorem pop_top' {st : MatchStack w} {as bs : List (Action w)}
       use 0, st; simp [*]
 
 /-- An older version of `top_equiv` that assumes `st.Terminates` instead -/
-theorem top_equiv' {st : MatchStack w} (term : st.Terminates)
-    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+theorem top_equiv' {st : MatchStack α} (term : st.Terminates)
+    {as bs : List (Action α)} (hst : st.entries = as ++ bs)
     : ∃ n st'', st.stepN n = Except.ok st'' ∧ st''.entries = bs ∧
       (mk as st.arg).stepN (n + 1) = Except.error st''.arg := by
   have ⟨n, st'', stepn, st''eq, min⟩ := st.pop_top' term hst
@@ -304,7 +304,7 @@ theorem top_equiv' {st : MatchStack w} (term : st.Terminates)
       rw [stepN, step, Except.ok_bind]
       simpa only [show (ac.process st.arg).arg = st'.arg by simp [st'eq]]
 
-theorem top_terminates {st : MatchStack w} {as bs : List (Action w)}
+theorem top_terminates {st : MatchStack α} {as bs : List (Action α)}
     (term : st.Terminates) (hst : st.entries = as ++ bs)
     : (mk as st.arg).Terminates := by
   have ⟨_, _, _, _, err⟩ := st.top_equiv' term hst
@@ -312,13 +312,13 @@ theorem top_terminates {st : MatchStack w} {as bs : List (Action w)}
 
 structure Terminator (w : List α) where
   /-- The condition -/
-  toFun : MatchStack w → Prop
+  toFun : MatchStack α → Prop
   /-- The condition ensures termination -/
   term : ∀ st, toFun st → st.Terminates
   /-- The condition is preserved -/
   pres : ∀ st st', toFun st → st.step = Except.ok st' → toFun st'
 
-instance : FunLike (Terminator w) (MatchStack w) Prop where
+instance : FunLike (Terminator w) (MatchStack α) Prop where
   coe := Terminator.toFun
   coe_injective' f g h := by cases f; cases g; congr
 
@@ -330,10 +330,10 @@ def Terminates.terminator : Terminator w where
 --/-- The subtype of stacks satisfying a particular termination condition.
 --The condition must be preserved. -/
 --def T' (f : Terminator w)
---  := {st : MatchStack w // f st}
+--  := {st : MatchStack α // f st}
 
 /-- The subtype of all terminating stacks -/
-@[reducible] def T (w : List α) := {st : MatchStack w // st.Terminates}
+@[reducible] def T (α : Type*) [DecidableEq α] := {st : MatchStack α // st.Terminates}
 
 end MatchStack
 
@@ -341,9 +341,9 @@ variable {f : MatchStack.Terminator w}
 
 namespace Action
 
-def matchStackT (ac : Action w) (arg : PartialMatches w)
+def matchStackT (ac : Action α) (arg : PartialMatches)
     (term : (ac.matchStack arg).Terminates)
-    : MatchStack.T w :=
+    : MatchStack.T α :=
   ⟨ac.matchStack arg, term⟩
 
 end Action
@@ -352,24 +352,21 @@ namespace MatchStack
 
 namespace T
 
-def StepResult (w : List α) :=
-  Except (PartialMatches w) (MatchStack.T w)
+instance instWellFoundedRelation : WellFoundedRelation (MatchStack.T α) := Acc.wfRel
 
-instance instWellFoundedRelation : WellFoundedRelation (MatchStack.T w) := Acc.wfRel
-
-def step (st : MatchStack.T w) : StepResult w
+def step (st : MatchStack.T α) : StepResult (MatchStack.T α)
   := match h : st.val.step with
   | Except.ok st' => Except.ok ⟨st', Acc.inv st.prop h⟩
   | Except.error result => Except.error result
 
-theorem step_coe {st : MatchStack.T w} : Subtype.val <$> st.step = st.val.step := by
+theorem step_coe {st : MatchStack.T α} : Subtype.val <$> st.step = st.val.step := by
   simp only [step]
   split <;> (
     expose_names;
     simp only [Except.map_ok, Except.map_error]
     exact Eq.symm heq)
 
-theorem step_eq_ok_coe {st st' : MatchStack.T w}
+theorem step_eq_ok_coe {st st' : MatchStack.T α}
     : st.step = Except.ok st' ↔ st.val.step = Except.ok st'.val := by
   have adv := st.step_coe
   constructor <;> intro eq
@@ -378,7 +375,7 @@ theorem step_eq_ok_coe {st st' : MatchStack.T w}
     rw [map_inj_right Subtype.val_inj.mp] at adv
     exact adv
 
-theorem step_eq_error_coe {st : MatchStack.T w} {res : PartialMatches w}
+theorem step_eq_error_coe {st : MatchStack.T α} {res : PartialMatches}
     : st.step = Except.error res ↔ st.val.step = Except.error res := by
   have adv := st.step_coe
   constructor <;> intro eq
@@ -387,14 +384,14 @@ theorem step_eq_error_coe {st : MatchStack.T w} {res : PartialMatches w}
     rw [← Except.map_error Subtype.val, map_inj_right Subtype.val_inj.mp] at adv
     exact adv
 
-theorem step_eq_ok {st st' : MatchStack.T w} (hst : st.step = Except.ok st')
-    : ∃ (ac : Action w) (as : List (Action w)),
+theorem step_eq_ok {st st' : MatchStack.T α} (hst : st.step = Except.ok st')
+    : ∃ (ac : Action α) (as : List (Action α)),
         st.val.entries = ac :: as ∧ st'.val = MatchStack.mk
           (entries := (ac.process st.val.arg).entries ++ as)
           (arg := (ac.process st.val.arg).arg)
   := st.val.step_eq_ok (step_eq_ok_coe.mp hst)
 
-theorem step_singleton (ac : Action w) {arg : PartialMatches w}
+theorem step_singleton (ac : Action α) {arg : PartialMatches}
     (term : (ac.matchStack arg).Terminates)
     : (ac.matchStackT arg term).step = Except.ok ⟨
         ac.process arg, Acc.inv term (step_singleton ac arg)
@@ -403,7 +400,7 @@ theorem step_singleton (ac : Action w) {arg : PartialMatches w}
   exact MatchStack.step_singleton ac arg
 
 /-- Run the matching algorithm to completion! -/
-def run (st : MatchStack.T w) : PartialMatches w :=
+def run (st : MatchStack.T α) : PartialMatches :=
   match _ : st.step with
   | Except.ok st' => st'.run
   | Except.error res => res
@@ -413,13 +410,13 @@ decreasing_by
 
 end T
 
-theorem coe_val {st : MatchStack w} (term : st.Terminates)
-  : st = (⟨st, term⟩ : T w).val := rfl
+theorem coe_val {st : MatchStack α} (term : st.Terminates)
+  : st = (⟨st, term⟩ : T α).val := rfl
 
 /-- A convenience function for running a match stack -/
-def run (st : MatchStack w) (term : st.Terminates) := T.run ⟨st, term⟩
+def run (st : MatchStack α) (term : st.Terminates) := T.run ⟨st, term⟩
 
-theorem run_eq_step_run {st : MatchStack w} (term : st.Terminates)
+theorem run_eq_step_run {st : MatchStack α} (term : st.Terminates)
     : st.run term = match h : st.step with
       | Except.ok st' => st'.run (step_terminates term h)
       | Except.error mat => mat := by
@@ -428,7 +425,7 @@ theorem run_eq_step_run {st : MatchStack w} (term : st.Terminates)
   · simp only [T.step_eq_ok_coe] at heq; rw! [heq]; simp only; rfl
   · simp only [T.step_eq_error_coe] at heq; rw! [heq]; simp only
 
-theorem run_eq_stepN_run {st : MatchStack w} (n : ℕ) (term : st.Terminates)
+theorem run_eq_stepN_run {st : MatchStack α} (n : ℕ) (term : st.Terminates)
     : st.run term = match h : st.stepN n with
       | Except.ok st' => st'.run (stepN_terminates term h)
       | Except.error mat => mat := by
@@ -447,7 +444,7 @@ theorem run_eq_stepN_run {st : MatchStack w} (n : ℕ) (term : st.Terminates)
       rw! [h, Except.error_bind, run_eq_step_run, h]
       rfl
 
-theorem run_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches w}
+theorem run_of_stepN {st : MatchStack α} {n : ℕ} {mat : PartialMatches}
     (hst : st.stepN n = Except.error mat)
     : st.run (terminates_of_stepN hst) = mat := by
   have term := terminates_of_stepN hst
@@ -464,7 +461,7 @@ theorem run_of_stepN {st : MatchStack w} {n : ℕ} {mat : PartialMatches w}
       rw [coe_val term, ← T.step_eq_error_coe] at h
       rw [run, T.run, h, hst]
 
-theorem stepN_of_run {st : MatchStack w} (term : st.Terminates)
+theorem stepN_of_run {st : MatchStack α} (term : st.Terminates)
     : ∃ n, st.stepN n = Except.error (st.run term) := by
   have ⟨n, mat, hst⟩ := terminates_iff.mp term
   induction n generalizing st with | zero => simp at hst | succ n ind =>
@@ -479,8 +476,8 @@ theorem stepN_of_run {st : MatchStack w} (term : st.Terminates)
       use 1
       rw! [step1_eq_step, run_eq_step_run, h]; simp only
 
-theorem top_run_equiv {st : MatchStack w}
-    {as bs : List (Action w)} (term : (mk as st.arg).Terminates)
+theorem top_run_equiv {st : MatchStack α}
+    {as bs : List (Action α)} (term : (mk as st.arg).Terminates)
     (hst : st.entries = as ++ bs)
     : ∃ n, st.stepN n =
       Except.ok (mk bs ((mk as st.arg).run term)) := by
@@ -492,8 +489,8 @@ theorem top_run_equiv {st : MatchStack w}
   have st'mk : st' = mk st'.entries st'.arg := rfl
   rwa [st'eq] at st'mk
 
-theorem top_run_equiv' {st : MatchStack w} (term : st.Terminates)
-    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+theorem top_run_equiv' {st : MatchStack α} (term : st.Terminates)
+    {as bs : List (Action α)} (hst : st.entries = as ++ bs)
     : ∃ n, st.stepN n =
       Except.ok (mk bs ((mk as st.arg).run (top_terminates term hst))) := by
   have ⟨n, st', hst', st'eq, stepn⟩ := st.top_equiv' term hst
@@ -504,14 +501,14 @@ theorem top_run_equiv' {st : MatchStack w} (term : st.Terminates)
   have st'mk : st' = mk st'.entries st'.arg := rfl
   rwa [st'eq] at st'mk
 
---theorem top_run_terminates {st : MatchStack w} (term : st.Terminates)
---    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+--theorem top_run_terminates {st : MatchStack α} (term : st.Terminates)
+--    {as bs : List (Action α)} (hst : st.entries = as ++ bs)
 --    : (mk bs (T.run ⟨mk as st.arg, st.top_terminates term hst⟩)).Terminates := by
 --  have ⟨n, top⟩ := st.top_run_equiv term hst
 --  exact stepN_terminates term top
 
-theorem top_run_terminates_iff {st : MatchStack w}
-    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+theorem top_run_terminates_iff {st : MatchStack α}
+    {as bs : List (Action α)} (hst : st.entries = as ++ bs)
     : st.Terminates ↔ (top : (mk as st.arg).Terminates) ∧
       (mk bs ((mk as st.arg).run top)).Terminates := by
   constructor
@@ -526,15 +523,15 @@ theorem top_run_terminates_iff {st : MatchStack w}
     use n + n', mat
     rwa [stepN_add_eq_bind, top, Except.ok_bind]
 
-theorem run_eq_top_run {st : MatchStack w} {term : st.Terminates}
-    {as bs : List (Action w)} (hst : st.entries = as ++ bs)
+theorem run_eq_top_run {st : MatchStack α} {term : st.Terminates}
+    {as bs : List (Action α)} (hst : st.entries = as ++ bs)
     : st.run term =
       (mk bs ((mk as st.arg).run ((top_run_terminates_iff hst).mp term).1)).run
         ((top_run_terminates_iff hst).mp term).2 := by
   have ⟨n, equiv⟩ := top_run_equiv' term hst
   rw! [run_eq_stepN_run n term, equiv]; simp
 
-def step_acc {β : Type*} {f : β → MatchStack w} {a : β}
+def step_acc {β : Type*} {f : β → MatchStack α} {a : β}
     (acc : Acc (fun b a ↦ (f a).step = Except.ok (f b)) a)
     (emb : ∀ a st', (f a).step = Except.ok st' → ∃ b, f b = st')
     : (f a).Terminates := by
@@ -550,13 +547,13 @@ end MatchStack
 namespace Action
 
 /-- The first action can be stepped to from the second action -/
-def InvStep (law : Action w → PartialMatches w → Prop) (ac' ac : Action w) :=
+def InvStep (law : Action α → PartialMatches → Prop) (ac' ac : Action α) :=
   ∃ arg, law ac arg ∧ ac' ∈ (ac.process arg).entries
 
 /-- A law that actions must follow given an argument. -/
 structure Law (w : List α) where
   /-- The law -/
-  toFun : Action w → PartialMatches w → Prop
+  toFun : Action α → PartialMatches → Prop
   /-- The law ensures termination -/
   term : ∀ ac arg, toFun ac arg →
     Acc (fun ac' ac ↦ InvStep toFun ac' ac) ac
@@ -570,12 +567,12 @@ structure Law (w : List α) where
     (ac.matchStack arg).stepN n = Except.ok ⟨ac1 :: ac2 :: as, arg'⟩ →
     (ac1.process arg').entries = [] → toFun ac2 (ac1.process arg').arg
 
-instance : FunLike (Law w) (Action w) (PartialMatches w → Prop) where
+instance : FunLike (Law w) (Action α) (PartialMatches → Prop) where
   coe := Law.toFun
   coe_injective' f g h := by cases f; cases g; congr
 
 /-- The specific actions that are lawful and terminate based on `l` -/
-def L (l : Law w) := {ac : Action w // ∃ arg, l ac arg}
+def L (l : Law w) := {ac : Action α // ∃ arg, l ac arg}
 
 namespace L
 
@@ -595,19 +592,19 @@ open scoped StackDMO
 
 /-- A state is reachable with some law if there is an action and argument
 that satisfies the law and can reach this state -/
-def Reachable (st : MatchStack w) (l : Action w → PartialMatches w → Prop) :=
+def Reachable (st : MatchStack α) (l : Action α → PartialMatches → Prop) :=
   ∃ ac arg, l ac arg ∧ ∃ n, (ac.matchStack arg).stepN n = Except.ok st
 
-theorem Reachable.step {l : Action.Law w} {st st' : MatchStack w} (reach : st.Reachable l)
+theorem Reachable.step {l : Action.Law w} {st st' : MatchStack α} (reach : st.Reachable l)
     (hst : st.step = Except.ok st')
     : st'.Reachable l := by
   rcases reach with ⟨ac₀, arg₀, law, n, stepn⟩
   use ac₀, arg₀, law, n + 1
   exact hst ▸ stepN_step stepn
 
-theorem law_arg_preserved {l : Action.Law w} {st : MatchStack w}
+theorem law_arg_preserved {l : Action.Law w} {st : MatchStack α}
     (stepn : st.Reachable l)
-    {ac : Action w} {as' : List (Action w)} (hac : st.entries = ac :: as')
+    {ac : Action α} {as' : List (Action α)} (hac : st.entries = ac :: as')
     : l ac st.arg := by
   rcases stepn with ⟨ac₀, arg₀, law, n, stepn⟩
   induction n generalizing st ac as' with
@@ -633,7 +630,7 @@ theorem law_arg_preserved {l : Action.Law w} {st : MatchStack w}
       obtain ⟨push, _⟩ := push
       simpa [← hac.1, hst]
 
-theorem law_invStep {l : Action.Law w} {st st' : MatchStack w}
+theorem law_invStep {l : Action.Law w} {st st' : MatchStack α}
     : st.Reachable l →
     st.step = Except.ok st' → st'.entries ≺ˢ[Action.InvStep l] st.entries := by
   rintro ⟨ac₀, arg₀, law, n, stepn⟩ hst
@@ -657,7 +654,7 @@ theorem law_invStep {l : Action.Law w} {st st' : MatchStack w}
     refine ⟨st.arg, ?_, amem⟩
     exact st.law_arg_preserved ⟨ac₀, arg₀, law, n + 1, stepn⟩ has'
 
-theorem law_preserved {l : Action.Law w} {st : MatchStack w}
+theorem law_preserved {l : Action.Law w} {st : MatchStack α}
     : st.Reachable l →
     ∀ ac ∈ st.entries, ∃ arg, l ac arg := by
   rintro ⟨ac₀, arg₀, law, n, stepn⟩ ac mem
@@ -685,7 +682,7 @@ theorem law_preserved {l : Action.Law w} {st : MatchStack w}
       · exact push.2 ac acmem
       · exact lawas_ ac acmem
 
-theorem law_action_acc {l : Action.Law w} {st : MatchStack w}
+theorem law_action_acc {l : Action.Law w} {st : MatchStack α}
     : st.Reachable l →
     ∀ ac ∈ st.entries, Acc (Action.InvStep l) ac := by
   rintro reach ac mem

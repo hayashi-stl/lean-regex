@@ -1,14 +1,14 @@
-import Regex.Basic
+import Regex.Lemmas.Bounds
 
 -- Some useful lemmas about regexes
 
 namespace Regex
 variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
-  {s : Pos w} {cap : Captures w} {term : r.Terminates w s cap}
+  {s : ℕ} {cap : Captures} {term : r.Terminates w s cap}
 
 /-- A partial match is monotone if all matches end on or after where they start.
 Ideally this will be true for all regexes. -/
-def Monotone (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
+def Monotone (r : Regex α) (w : List α) (s : ℕ) (cap : Captures)
     (term : r.Terminates w s cap) :=
     ∀ {s'} {cap'}, (s', cap') ∈ r.matchPartial w s cap term → s ≤ s'
 
@@ -19,12 +19,9 @@ theorem monotone_empty : [//].Monotone w s cap empty_terminates := by
   simp [Monotone, matchPartial_empty]
 
 theorem monotone_unit {c : α} : [/c/].Monotone w s cap unit_terminates := by
-  simp only [Monotone, matchPartial_unit, List.mem_dite_nil_right,
-    List.mem_cons, List.not_mem_nil, or_false, ← Icc.val_inj,
-    Prod.mk.injEq, Icc.succOfIndex_val, exists_and_left, exists_prop, and_imp]
-  intro t s' hs' _
-  rw [Icc.val_le_val, hs']
-  intro _
+  simp only [Monotone, matchPartial_unit, List.mem_ite_nil_right, List.mem_cons, Prod.mk.injEq,
+    List.not_mem_nil, or_false, and_imp]
+  intro t s' hs' _ _
   linarith
 
 theorem monotone_concat {q r : Regex α} {term : [/⟨q⟩ ⟨r⟩/].Terminates w s cap}
@@ -100,35 +97,35 @@ theorem monotone_backref {d : BackrefDefault} {n : ℕ}
   rw [Monotone, matchPartial_backref]
   split <;> expose_names
   · split <;> simp
-  · simp only [List.extract_eq_drop_take, add_tsub_cancel_left, List.mem_dite_nil_right,
-      List.mem_cons, Prod.mk.injEq, ← Icc.val_inj, Icc.addOfIndex_val, List.not_mem_nil, or_false,
-      exists_and_left, exists_prop, and_imp]
-    intro _ _ s'eq _ _
-    rw [Icc.val_le_val]
-    simp [s'eq]
+  · simp only [List.extract_eq_drop_take, List.length_take, List.length_drop, add_tsub_cancel_left,
+      List.mem_ite_nil_right, List.mem_cons, Prod.mk.injEq, List.not_mem_nil, or_false, and_imp]
+    intro _ _ _ seq _
+    simp [seq]
 
 theorem monotone : r.Monotone w s cap term := by
-  revert term
-  induction s using Icc.strongRecEnd generalizing r cap with | ind s ind =>
-    intro term
-    induction r generalizing cap with
-    | bot => exact monotone_bot
-    | empty => exact monotone_empty
-    | unit _ => exact monotone_unit
-    | concat q r qind rind =>
-      refine monotone_concat qind fun mat mem ↦ ?_
-      simp only [Monotone] at qind
-      rcases lt_or_eq_of_le (qind mem) with lt | eq
-      · exact ind _ lt
-      · rw! [← eq]; exact rind
-    | or q r qind rind => exact monotone_or qind rind
-    | filterEmpty e q qind => exact monotone_filterEmpty qind
-    | star t q qind =>
-      refine monotone_star qind fun mat mem lt ↦ ?_
-      exact ind _ lt
-    | start => exact monotone_start
-    | end' => exact monotone_end'
-    | capture n q qind => exact monotone_capture qind
-    | backref _ _ => exact monotone_backref
+  --by_cases! h : s ≤ w.length (by_cases unfolds Monotone and `intro`s variables :( )
+  rcases le_or_gt s w.length with h | h
+  · revert term
+    induction s, h using decreasingStrongRec generalizing r cap with | ind s slt ind =>
+      intro term
+      induction r generalizing cap with
+      | bot => exact monotone_bot
+      | empty => exact monotone_empty
+      | unit _ => exact monotone_unit
+      | concat q r qind rind =>
+        refine monotone_concat qind fun mat mem ↦ ?_
+        simp only [Monotone] at qind
+        rcases lt_or_eq_of_le (qind mem) with lt | eq
+        · exact ind mat.1 slt _ lt
+        · rw! [← eq]; exact rind
+      | or q r qind rind => exact monotone_or qind rind
+      | filterEmpty e q qind => exact monotone_filterEmpty qind
+      | star t q qind =>
+        refine monotone_star qind fun mat mem lt ↦ ?_
+        exact ind _ lt
+      | start => exact monotone_start
+      | end' => exact monotone_end'
+      | capture n q qind => exact monotone_capture qind
+      | backref _ _ => exact monotone_backref
 
 end Regex
