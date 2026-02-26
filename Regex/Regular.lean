@@ -1,5 +1,7 @@
 import Regex.Lemmas.Bounds
 import Regex.Lemmas.Monotone
+import Regex.Match
+import Regex.Termination
 
 variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 
@@ -7,7 +9,7 @@ namespace Regex
 
 /-- Whether a language is truly regular or just a faker. This is
 why it's good to separate `Regex` from `RegularExpression`. -/
-def isRegular (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
+def Regular (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
   := ∃ r' : RegularExpression α, r.language term = r'.matches'
 
 /-- The classic regular expression operators -/
@@ -19,30 +21,30 @@ inductive classRegular : Regex α → Prop where
   | or q r : classRegular q → classRegular r → classRegular (or q r)
   | star t r : classRegular r → classRegular (star t r)
 
-section MatchPartialFree
-
-variable {s : ℕ} {cap : Captures}
-
 /-- A regex where `partialMatch` does not care about outside context
-like captures -/
+like captures.
+Proving/using a tailored termination condition has proved to be difficult,
+so this predicate requires the regex to always terminate. -/
 def MatchPartialFree (r : Regex α) :=
-  ∀ w s cap term mat, mat ∈ r.matchPartial w s cap term →
-  ∀ (wa wb : List α) cap₁ term₁,
+  (term : r.AlwaysTerminates) ∧
+  ∀ w s cap mat, mat ∈ r.matchPartial w s cap (term w s cap) →
+    ∀ (wa wb : List α) cap₁,
     ∃ cap₁', ((wa ++ w.extract s mat.1).length, cap₁') ∈
-      r.matchPartial (wa ++ w.extract s mat.1 ++ wb) wa.length cap₁ term₁
+      r.matchPartial (wa ++ w.extract s mat.1 ++ wb) wa.length cap₁ (term _ _ _)
 
 theorem matchPartialFree_bot : MatchPartialFree ([/⊥/] : Regex α) := by
-  simp [MatchPartialFree, matchPartial_bot]
+  simp [MatchPartialFree, matchPartial_bot, alwaysTerminates_bot]
 
 theorem matchPartialFree_empty : MatchPartialFree ([//] : Regex α) := by
-  simp [MatchPartialFree, matchPartial_empty]
+  simp [MatchPartialFree, matchPartial_empty, alwaysTerminates_empty]
 
-theorem matchPartialFree_unit (c : α) : MatchPartialFree [/c/] := by
+theorem matchPartialFree_unit {c : α} : MatchPartialFree [/c/] := by
   simp only [MatchPartialFree, matchPartial_unit, List.mem_ite_nil_right, List.mem_cons,
-    List.not_mem_nil, or_false, List.extract_eq_drop_take, List.append_assoc, Prod.mk.injEq,
-    exists_and_left, ↓existsAndEq, and_true, and_imp,
-    forall_eq_apply_imp_iff, add_tsub_cancel_left]
-  intro w s cap term wsc wa wb cap₁ term₁
+    List.not_mem_nil, or_false, List.extract_eq_drop_take, List.append_assoc, List.length_append,
+    List.length_take, List.length_drop, Prod.mk.injEq, Nat.add_left_cancel_iff, exists_and_left,
+    ↓existsAndEq, and_true, forall_const, and_imp, forall_eq_apply_imp_iff, add_tsub_cancel_left,
+    inf_eq_left, dand_eq_and, alwaysTerminates_unit, true_and]
+  intro w s wsc wa wb
   rw [List.getElem?_append_right (le_refl _), Nat.sub_self]
   have ⟨slt, wsc⟩ := List.getElem?_eq_some_iff.mp wsc
   rw [List.getElem?_append_left (by simp [slt])]
@@ -53,27 +55,29 @@ theorem matchPartialFree_concat {q r : Regex α} (qf : q.MatchPartialFree)
     : [/⟨q⟩ ⟨r⟩/].MatchPartialFree := by
   simp only [MatchPartialFree, matchPartial_concat, List.mem_flatten, List.mem_pmap, Prod.exists,
     ↓existsAndEq, true_and, forall_exists_index, Prod.forall]
-  intro w s cap term s'' cap'' s' cap' qmem rmem wa wb cap₁ term₁
-  specialize qf _ _ _ _ _ qmem wa (w.extract s' s'' ++ wb) cap₁
+  refine ⟨alwaysTerminates_concat qf.1 rf.1, ?_⟩
+  intro w s cap s'' cap'' s' cap' qmem rmem wa wb cap₁
+  have qf := qf.2 _ _ _ _ qmem wa (w.extract s' s'' ++ wb) cap₁
   have qm := monotone _ _ _ _ _ qmem
   have rm := monotone _ _ _ _ _ rmem
-  rw [List.extract_append_extract_assoc_right _ qm rm] at qf
-  have ⟨cap₁', qmem₁⟩ := qf (concat_terminates.mp term₁).1
-  specialize rf _ _ _ _ _ rmem (wa ++ w.extract s s') wb cap₁'
-  rw [List.extract_append_extract_assoc_left _ qm rm] at rf
-  have ⟨cap₁'', rmem₁⟩ := rf ((concat_terminates.mp term₁).2 _ qmem₁)
-  rw [List.append_assoc _ (w.extract s s'), List.extract_append_extract _ qm rm] at rmem₁
+  rw! [List.extract_append_extract_assoc_right _ qm rm] at qf
+  have ⟨cap₁', qmem₁⟩ := qf
+  have rf := rf.2 _ _ _ _ rmem (wa ++ w.extract s s') wb cap₁'
+  rw! [List.extract_append_extract_assoc_left _ qm rm] at rf
+  have ⟨cap₁'', rmem₁⟩ := rf
+  rw! [List.append_assoc _ (w.extract s s'), List.extract_append_extract _ qm rm] at rmem₁
   exact ⟨_, _, _, qmem₁, rmem₁⟩
 
 theorem matchPartialFree_or {q r : Regex α} (qf : q.MatchPartialFree)
     (rf : r.MatchPartialFree)
     : [/⟨q⟩ | ⟨r⟩/].MatchPartialFree := by
   simp only [MatchPartialFree, matchPartial_or, List.mem_append, Prod.forall]
-  intro w s cap term s' cap' mem wa wb cap₁ term₁
+  refine ⟨alwaysTerminates_or qf.1 rf.1, ?_⟩
+  intro w s cap s' cap' mem wa wb cap₁
   rcases mem with mem | mem
-  · have ⟨cap₁', mem'⟩ := qf _ _ _ _ _ mem wa wb cap₁ (or_terminates.mp term₁).1
+  · have ⟨cap₁', mem'⟩ := qf.2 _ _ _ _ mem wa wb cap₁
     exact ⟨cap₁', Or.inl mem'⟩
-  · have ⟨cap₁', mem'⟩ := rf _ _ _ _ _ mem wa wb cap₁ (or_terminates.mp term₁).2
+  · have ⟨cap₁', mem'⟩ := rf.2 _ _ _ _ mem wa wb cap₁
     exact ⟨cap₁', Or.inr mem'⟩
 
 theorem matchPartialFree_filterEmpty {e : Bool} {r : Regex α} (rf : r.MatchPartialFree)
@@ -81,8 +85,9 @@ theorem matchPartialFree_filterEmpty {e : Bool} {r : Regex α} (rf : r.MatchPart
   simp only [MatchPartialFree, matchPartial_filterEmpty, ge_iff_le, eq_iff_iff,
     Bool.decide_iff_dist, Bool.decide_eq_true, List.mem_filter, beq_iff_eq,
     and_imp, Prod.forall]
-  intro w s cap term s' cap' mem dec wa wb cap₁ term₁
-  have ⟨cap₁', mem₁⟩ := rf _ _ _ _ _ mem _ _ _ (filterEmpty_terminates.mp term₁)
+  refine ⟨alwaysTerminates_filterEmpty rf.1, ?_⟩
+  intro w s cap s' cap' mem dec wa wb cap₁
+  have ⟨cap₁', mem₁⟩ := rf.2 _ _ _ _ mem wa wb cap₁
   refine ⟨cap₁', mem₁, ?_⟩
   cases e with
   | false =>
@@ -106,12 +111,13 @@ theorem matchPartialFree_filterEmpty {e : Bool} {r : Regex α} (rf : r.MatchPart
 -- Actually, forgot about star difference...
 theorem matchPartialFree_or_comm {q r : Regex α} (mpf : [/⟨q⟩ | ⟨r⟩/].MatchPartialFree)
     : [/⟨r⟩ | ⟨q⟩/].MatchPartialFree := by
-  rw [MatchPartialFree]
-  simp only [or_terminates_comm (q := r), mem_matchPartial_or_comm (q := r)]
+  rw! [MatchPartialFree, alwaysTerminates_or_comm]
+  simp only [mem_matchPartial_or_comm (q := r)]
   exact mpf
 
 theorem matchPartialFree_star_greedy {r : Regex α} (rf : r.MatchPartialFree)
     : [/⟨r⟩*/].MatchPartialFree := by
+  refine ⟨alwaysTerminates_star rf.1, ?_⟩
   intro w s
   by_cases! sle : s ≤ w.length
   · induction s, sle using decreasingStrongRec with | ind s sle ind =>
@@ -121,40 +127,37 @@ theorem matchPartialFree_star_greedy {r : Regex α} (rf : r.MatchPartialFree)
         List.mem_append, List.mem_filter, decide_eq_true_eq, List.mem_flatten,
         List.mem_pmap, Prod.exists, ↓existsAndEq, true_and, List.mem_cons, List.not_mem_nil,
         or_false, Prod.mk.injEq, Prod.forall]
-      intro cap term s'' cap'' mem wa wb cap₁ term₁
+      intro cap s'' cap'' mem wa wb cap₁
       rcases mem with (mem | ⟨s', cap', mem, mem'⟩) | eq
-      · have ⟨cap₁', mem₁⟩ := rf _ _ _ _ _ mem.1 wa wb cap₁ (star_terminates.mp term₁).1
+      · have ⟨cap₁', mem₁⟩ := rf.2 _ _ _ _ mem.1 wa wb cap₁
         refine ⟨_, Or.inl (Or.inl ⟨mem₁, ?_⟩)⟩
         have eq := le_antisymm mem.2 (monotone _ _ _ _ _ mem.1)
         simp [eq]
       · have s'le := endInBounds _ _ sle _ _ _ mem.1
-        specialize rf _ _ _ _ _ mem.1 wa (w.extract s' s'' ++ wb) cap₁
+        have rf := rf.2 _ _ _ _ mem.1 wa (w.extract s' s'' ++ wb) cap₁
         have rm := monotone _ _ _ _ _ mem.1
         have rm' := monotone _ _ _ _ _ mem'
-        rw [List.extract_append_extract_assoc_right _ rm rm'] at rf
-        have ⟨cap₁', mem₁⟩ := rf (star_terminates.mp term₁).1
-        specialize ind s' s'le mem.2 _ _ _ mem' (wa ++ w.extract s s') wb cap₁'
-        rw [List.extract_append_extract_assoc_left _ rm rm'] at ind
-        have term₁ := (star_terminates.mp term₁).2 _ mem₁ (by
-          (suffices s < s' ∧ s < w.length by simpa); exact ⟨mem.2, trans mem.2 s'le⟩)
-        have ⟨cap₁'', mem₁'⟩ := ind term₁
-        rw [List.append_assoc _ (w.extract s s'), List.extract_append_extract _ rm rm'] at mem₁'
+        rw! [List.extract_append_extract_assoc_right _ rm rm'] at rf
+        have ⟨cap₁', mem₁⟩ := rf
+        specialize ind s' s'le mem.2 _ _ mem' (wa ++ w.extract s s') wb cap₁'
+        rw! [List.extract_append_extract_assoc_left _ rm rm'] at ind
+        have ⟨cap₁'', mem₁'⟩ := ind
+        rw! [List.append_assoc _ (w.extract s s'), List.extract_append_extract _ rm rm'] at mem₁'
         refine ⟨cap₁'', Or.inl (Or.inr ⟨_, _, ⟨mem₁, ?_⟩, mem₁'⟩)⟩
         suffices s < s' ∧ s < w.length by simpa
         exact ⟨mem.2, trans mem.2 s'le⟩
       · refine ⟨cap₁, Or.inr ?_⟩
         simp [eq]
-  · intro cap term mat mem wa wb cap₁ term₁
+  · intro cap mat mem wa wb cap₁
     have bound := matchPartial_outOfBounds_eq (le_of_lt sle) mem
     use cap₁
     simp [bound, matchPartial_star, matchPartial_or, matchPartial_empty]
 
 theorem matchPartialFree_star_greedy_iff_lazy {r : Regex α}
     : [/⟨r⟩*/].MatchPartialFree ↔ [/⟨r⟩*?/].MatchPartialFree := by
-  simp only [MatchPartialFree, star_terminates', matchPartial_star,
-    or_terminates_comm (q := [//]), mem_matchPartial_or_comm (q := [//])]
-  simp only [or_terminates, matchPartial_or, concat_terminates, matchPartial_concat,
-    star_terminates_greedy_iff_lazy, matchPartial_empty]
+  rw! [MatchPartialFree, MatchPartialFree, alwaysTerminates_star_greedy_iff_lazy]
+  simp only [matchPartial_star, mem_matchPartial_or_comm (q := [//])]
+  simp only [matchPartial_or, matchPartial_concat, matchPartial_empty]
   simp only [List.mem_append, List.mem_flatten, List.mem_pmap, ↓existsAndEq,
     mem_matchPartial_star_greedy_iff_lazy]
 
@@ -164,110 +167,101 @@ theorem matchPartialFree_star {t : StarType} {r : Regex α} (rf : r.MatchPartial
   | greedy => exact matchPartialFree_star_greedy rf
   | lazy => exact matchPartialFree_star_greedy_iff_lazy.mp (matchPartialFree_star_greedy rf)
 
-end MatchPartialFree
+/-- The classic regular operators are match-partial-free. -/
+theorem matchPartialFree_classRegular {r : Regex α} (hr : r.classRegular)
+    : r.MatchPartialFree := by
+  induction hr with
+  | bot => exact matchPartialFree_bot
+  | empty => exact matchPartialFree_empty
+  | unit _ => exact matchPartialFree_unit
+  | concat _ _ _ _ qind rind => exact matchPartialFree_concat qind rind
+  | or _ _ _ _ qind rind => exact matchPartialFree_or qind rind
+  | star _ _ _ rind => exact matchPartialFree_star rind
 
-def sndErasing {α β γ : Type*} (f : α × β → γ) := ∀ a b₁ b₂, f (a, b₁) = f (a, b₂)
+theorem match'_of_matchPartialFree {r : Regex α} (rf : r.MatchPartialFree)
+    {w} {s} {cap} {mat} (mem : mat ∈ r.matchPartial w s cap (rf.1 w s cap))
+    : r.match' (w.extract s mat.1) (rf.1 _ _ _) ≠ [] := by
+  have ⟨cap₁', rf⟩ := rf.2 _ _ _ _ mem [] [] 0
+  simp only [List.nil_append, List.append_nil, List.length_nil] at rf
+  rw [← mem_match'_iff_length_mem] at rf
+  exact List.ne_nil_of_mem rf
 
-/-- Captures are irrelevant to the internal behavior of `matchPartial` in
-regular regexes. -/
-theorem limitRegular_matchPartial_eraseCaptures (rlim : classRegular r)
-    (w : List α) (s : ℕ)
-    : ∀ {β : Type*} (f : _ → β), sndErasing f → ∀ c₁ c₂,
-      (r.matchPartial w s c₁).map f =
-      (r.matchPartial w s c₂).map f := by
-  simp only [sndErasing]
-  induction rlim generalizing s
-  · simp [matchPartial_bot]
-  · simp only [matchPartial_empty, List.map_cons, List.map_nil, List.cons.injEq, and_true]
-    exact (fun f sf ↦ sf s.posFrom)
-  · rename_i c
-    simp only [matchPartial, failure, List.pure_def]
-    intro β f sf c₁ c₂
-    simp [apply_dite (List.map f), sf _ c₁ c₂]
-  · rename_i p q plim qlim pind qind
-    simp only [matchPartial, List.pure_def, List.bind_eq_flatMap]
-    simp only [List.map_flatMap, List.map_cons, List.map_nil]
-    intro β f sf c₁ c₂
-    have pur (a : PosFrom s × Captures)
-        : (fun a_1 : PosFrom a.1.pos × Captures ↦ [f (a.1.widen a_1.1, a_1.2)]) =
-          pure ∘ (fun a_1 : PosFrom a.1.pos × Captures ↦ f (a.1.widen a_1.1, a_1.2)) := by
-      simp [Function.comp_def, List.pure_def]
-    simp only [pur, List.flatMap_pure_eq_map]
-    simp only [List.flatMap]
-    congr 1
-    rw [pind s _ _ c₁ c₂]
-    intro s' c₁' c₂'; simp only []
-    rw [qind s'.pos _ _ c₁' c₂']
-    simp only []
-    exact (fun a ↦ sf (s'.widen a))
-  · rename_i p q plim qlim pind qind
-    simp [matchPartial]
-    intros β f sf c₁ c₂
-    rw [pind s f sf c₁ c₂, qind s f sf c₁ c₂]
-  · rename_i t q qlim qind
-    induction w; all_goals (
-      simp only [matchPartial.eq_def, List.pure_def, List.cons_append, List.nil_append]
-      simp only [matchPartialStar, Prod.mk.eta, List.pure_def, List.map_eq_map,
-        List.bind_eq_flatMap]
-      intro β f sf c₁ c₂
-      rw [StarType.map_match (List.map f), StarType.map_match (List.map f)]
-      simp only [List.map_append, List.map_flatMap, List.map_cons, List.map_nil]
-    )
-    ·
-      simp only [Pos.nil_eq, ↓reduceIte, List.map_cons, List.map_nil]
-      have pur : (fun a ↦ [f a]) = pure ∘ (fun a ↦ f a) := by simp [Function.comp_def]
-      simp [pur, List.flatMap_pure_eq_map, show (fun a ↦ f a) = f by rfl,
-        qind s f sf c₁ c₂, sf s.posFrom c₁ c₂]
-    expose_names
+theorem isMatch_of_matchPartialFree {r : Regex α} (rf : r.MatchPartialFree)
+    {w} {s} {cap} {mat} (mem : mat ∈ r.matchPartial w s cap (rf.1 w s cap))
+    : r.IsMatch (w.extract s mat.1) (rf.1 _ _ _) := by
+  exact match'_of_matchPartialFree rf mem
+
+/-- For regexes that are match-partial-free, the language of the concatenation
+*is* the concatenation of the languages. -/
+theorem language_concat_of_matchPartialFree {q r : Regex α}
+    (qf : q.MatchPartialFree) (rf : r.MatchPartialFree)
+    : [/⟨q⟩ ⟨r⟩/].language (fun w ↦ alwaysTerminates_concat qf.1 rf.1 w _ _) =
+      q.language (fun w ↦ qf.1 w _ _) * r.language (fun w ↦ rf.1 w _ _) := by
+  ext w
+  simp only [mem_language_iff, isMatch_concat, Language.mem_mul]
+  constructor
+  · rintro ⟨mat, qmem, mat', rmem⟩
+    have qism := isMatch_of_matchPartialFree qf qmem
+    have rism := isMatch_of_matchPartialFree rf rmem.1
+    refine ⟨_, qism, _, rism, ?_⟩
+    rw [List.extract_append_extract _ (Nat.zero_le _) (monotone _ _ _ _ _ rmem.1), rmem.2]
+    simp
+  · rintro ⟨wq, qism, wr, rism, app⟩
+    have ⟨qmat, qmem⟩ := List.exists_mem_of_ne_nil _ qism
+    have ⟨rmat, rmem⟩ := List.exists_mem_of_ne_nil _ rism
+    rw [mem_match'_iff] at qmem rmem
+    have ⟨qcap₁', qmem₁⟩ := qf.2 _ _ _ _ qmem.1 [] wr 0
+    have ⟨rcap₁', rmem₁⟩ := rf.2 _ _ _ _ rmem.1 wq [] qcap₁'
+    simp only [qmem.2, and_true, rmem.2, List.extract_eq_drop_take, tsub_zero, List.drop_zero,
+      List.take_length, List.nil_append, List.length_nil, List.append_nil,
+      Prod.exists, exists_and_right, exists_eq_right, app] at *
+    exact ⟨_, _, qmem₁, _, rmem₁⟩
+
+/-! Now to prove that the classic regular operators are actually regular -/
+
+omit deq in
+theorem classTerminates_classRegular {r : Regex α} (hr : r.classRegular)
+    : r.classTerminates := by
+  induction hr with
+  | bot => exact classTerminates.bot
+  | empty => exact classTerminates.empty
+  | unit _ => exact classTerminates.unit _
+  | concat _ _ _ _ qt rt => exact classTerminates.concat _ _ qt rt
+  | or _ _ _ _ qt rt => exact classTerminates.or _ _ qt rt
+  | star _ _ _ rt => exact classTerminates.star _ _ rt
+
+theorem alwaysTerminates_classRegular {r : Regex α} (hr : r.classRegular) :
+  r.AlwaysTerminates :=
+  alwaysTerminates_classTerminates (classTerminates_classRegular hr)
+
+theorem regular_classRegular {r : Regex α} {hr : r.classRegular}
+    : r.Regular (fun w ↦ alwaysTerminates_classRegular hr w _ _) := by
+  induction hr with
+  | bot => use 0; simp [language_bot]
+  | empty => use 1; simp [language_empty]; rfl
+  | unit c => use .char c; simp [language_unit]
+  | concat q r qcr rcr qr rr =>
+    have ⟨qreg, qeq⟩ := qr
+    have ⟨rreg, req⟩ := rr
+    use qreg * rreg
+    rw [language_concat_of_matchPartialFree
+      (matchPartialFree_classRegular qcr) (matchPartialFree_classRegular rcr),
+      RegularExpression.matches'_mul, qeq, req]
+  | or q r _ _ qr rr =>
+    have ⟨qreg, qeq⟩ := qr
+    have ⟨rreg, req⟩ := rr
+    use qreg + rreg
+    rw [language_or, RegularExpression.matches'_add, qeq, req]
+  | star t r rcr rr =>
 
 
-      --simp [List.flatMap_pure_eq_map]
+theorem regular_bot : [/⊥/].Regular (α := α) (by termination) := by
+  use 0; simp [language_bot]
 
-    --rcases t with laze | greed
-    --· simp only [matchPartial, List.pure_def, List.cons_append, List.nil_append,
-    --    List.map_cons, List.cons.injEq]
-    --  simp only [matchPartial_star, Prod.mk.eta, List.pure_def, List.map_eq_map,
-    --    List.bind_eq_flatMap]
+theorem regular_empty : [//].Regular (α := α) (by termination) := by
+  use 1; simp [language_empty]; rfl
 
-/-- If the regex is actually regular, `isMatch` on `concat`
-and `star` behave nicely -/
-theorem limitRegular_isMatch_concat_star (rlim : classRegular r) (w : List α)
-    : match r with
-      | concat p q => isMatch r w ↔ ∃ s : ℕ,
-          isMatch p (w.take s.val) ∧ isMatch q (w.drop s.val)
-      | star t q => isMatch r w ↔ (hw : w ≠ []) →
-          ∃ s : PosFrom (Pos.succOfLt (List.length_pos_of_ne_nil hw)),
-            isMatch q (w.take s.val) ∧ isMatch r (w.drop s.val)
-      | _ => True
-      := by
-  induction rlim
-  case bot | empty | unit | or | capture => simp
-  · rename_i p q plim qlim pind qind
-    simp only []
-    rw [isMatch, match'_concat]
-  --intro lim
-  --induction lim
-  --case bot | empty | unit | or | capture => simp
-  --· rename_i p q plim qlim pind qind
-  --  simp only [concat.injEq, and_imp, forall_apply_eq_imp_iff, forall_eq',
-  --    reduceCtorEq, IsEmpty.forall_iff, implies_true, and_true]
-  --  intro w
-
-theorem isRegular_limitRegular : classRegular r → isRegular r := by
-  intro lim
-  induction lim
-  · use 0
-    simp [language_bot]
-  · use 1
-    simp [language_empty]; rfl
-  · rename_i c
-    use RegularExpression.char c
-    simp [language_unit]
-  · sorry
-  · rename_i q r qlim rlim qreg rreg
-    rcases qreg with ⟨q', q'eq⟩
-    rcases rreg with ⟨r', r'eq⟩
-    use q' + r'
-    simp [language_or, q'eq, r'eq]
+theorem regular_unit {c : α} : [/c/].Regular (by termination) := by
+  use {[c]};
 
 end Regex

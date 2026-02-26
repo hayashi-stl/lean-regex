@@ -198,21 +198,21 @@ theorem matchPartial_eq_run
     : r.matchPartial w s cap term = (mk [.regex r w s cap] []).run term := rfl
 
 /-- `bot` always terminates -/
-theorem bot_terminates
+theorem terminates_bot
     : [/⊥/].Terminates w s cap := by
   rw [Terminates, initMatchPartial]; step; step
 
 /-- `empty` always terminates -/
-theorem empty_terminates
+theorem terminates_empty
     : [//].Terminates w s cap := by
   rw [Terminates, initMatchPartial]; step; step
 
 /-- `unit` always terminates -/
-theorem unit_terminates {c : α}
+theorem terminates_unit {c : α}
     : [/c/].Terminates w s cap := by
   rw [Terminates, initMatchPartial]; step; step
 
-theorem Action.concat_terminates
+theorem Action.terminates_concat
     {old new arg : PartialMatches}
     : (MatchStack.mk [concat r w s old new] arg).Terminates ↔
       ∀ mat ∈ old, r.Terminates w mat.1 mat.2 := by
@@ -232,7 +232,7 @@ theorem Action.concat_terminates
       use term ent List.mem_cons_self
       exact ind fun m mem ↦ term _ (List.mem_cons_of_mem _ mem)
 
-theorem Action.concatWait_terminates {q r : Regex α} {arg : PartialMatches}
+theorem Action.terminates_concatWait {q r : Regex α} {arg : PartialMatches}
     : (MatchStack.mk [concatWait q r w s] arg).Terminates ↔
       ∀ mat ∈ arg, r.Terminates w mat.1 mat.2 := by
   constructor
@@ -240,17 +240,17 @@ theorem Action.concatWait_terminates {q r : Regex α} {arg : PartialMatches}
     step at term
     cases arg with | nil => contradiction | cons ent mat' =>
       simp only [reduceCtorEq, ↓reduceDIte, List.map_cons] at term
-      rw [concat_terminates] at term
+      rw [terminates_concat] at term
       exact term mat mem
   · intro term
     step
     cases arg with | nil => step | cons ent mat' =>
       simp only [reduceCtorEq, ↓reduceDIte, List.map_cons]
-      rwa [concat_terminates]
+      rwa [terminates_concat]
 
 /-- `concat q r` terminates iff `q` terminates and `r` terminates for every
 end position and match provided by `q` -/
-theorem concat_terminates {q r : Regex α}
+theorem terminates_concat {q r : Regex α}
     : [/⟨q⟩ ⟨r⟩/].Terminates w s cap ↔ (term : q.Terminates w s cap) ∧
       ∀ mat ∈ q.matchPartial w s cap term, r.Terminates w mat.1 mat.2 := by
   constructor
@@ -261,19 +261,19 @@ theorem concat_terminates {q r : Regex α}
     use term'
     intro mat qmat
     rw [matchPartial] at qmat
-    rw [Action.concatWait_terminates] at term
+    rw [Action.terminates_concatWait] at term
     exact term mat qmat
   · rintro ⟨qterm, term⟩
     rw [Terminates, initMatchPartial] at ⊢
     step
     run_top! using qterm
-    rw [Action.concatWait_terminates]
+    rw [Action.terminates_concatWait]
     exact fun mat run ↦ term mat run
 
-theorem Action.or_terminates {fst arg : PartialMatches}
+theorem Action.terminates_or {fst arg : PartialMatches}
     : (MatchStack.mk [or (α := α) s fst] arg).Terminates := by step; step
 
-theorem Action.orWait_terminates
+theorem Action.terminates_orWait
     {arg : PartialMatches}
     : (MatchStack.mk [orWait r w s cap] arg).Terminates ↔ r.Terminates w s cap := by
   constructor
@@ -284,10 +284,10 @@ theorem Action.orWait_terminates
   · intro term
     step
     run_top! using term
-    exact or_terminates
+    exact terminates_or
 
 /-- `or q r` terminates iff `q` terminates and `r` terminates -/
-theorem or_terminates {q r : Regex α}
+theorem terminates_or {q r : Regex α}
     : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap ↔
       q.Terminates w s cap ∧ r.Terminates w s cap := by
   constructor
@@ -295,23 +295,23 @@ theorem or_terminates {q r : Regex α}
     rw [Terminates, initMatchPartial] at term
     step at term
     run_top! at term with term' term
-    exact ⟨term', Action.orWait_terminates.mp term⟩
+    exact ⟨term', Action.terminates_orWait.mp term⟩
   · rintro ⟨qterm, rterm⟩
     rw [Terminates, initMatchPartial]
     step
     run_top! using qterm
-    exact Action.orWait_terminates.mpr rterm
+    exact Action.terminates_orWait.mpr rterm
 
 /-- `or` termination is symmetric -/
-theorem or_terminates_comm {q r : Regex α}
+theorem terminates_or_comm {q r : Regex α}
     : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap ↔ [/⟨r⟩ | ⟨q⟩/].Terminates w s cap := by
-  simp only [or_terminates]; rw [and_comm]
+  simp only [terminates_or]; rw [and_comm]
 
-theorem Action.filterEmpty_terminates {emp : Bool} {arg : PartialMatches}
+theorem Action.terminates_filterEmpty {emp : Bool} {arg : PartialMatches}
     : (MatchStack.mk [filterEmpty (α := α) emp s] arg).Terminates := by step; step
 
 /-- `filterEmpty emp r` terminates iff `r` terminates -/
-theorem filterEmpty_terminates {emp : Bool}
+theorem terminates_filterEmpty {emp : Bool}
     : [/⟨r⟩ ‹emp›ε/].Terminates w s cap ↔ r.Terminates w s cap := by
   constructor <;> intro term
   · rw [Terminates, initMatchPartial] at term
@@ -321,21 +321,21 @@ theorem filterEmpty_terminates {emp : Bool}
   · rw [Terminates, initMatchPartial]
     step
     run_top!
-    exact ⟨term, Action.filterEmpty_terminates⟩
+    exact ⟨term, Action.terminates_filterEmpty⟩
 
 /-- `start` always terminates -/
-theorem start_terminates
+theorem terminates_start
     : [/⊢/].Terminates w s cap := by rw [Terminates, initMatchPartial]; step; step
 
 /-- `end'` always terminates -/
-theorem end'_terminates
+theorem terminates_end'
     : [/⊣/].Terminates w s cap := by rw [Terminates, initMatchPartial]; step; step
 
-theorem Action.capture_terminates {n : ℕ} {arg : PartialMatches}
+theorem Action.terminates_capture {n : ℕ} {arg : PartialMatches}
     : (MatchStack.mk [capture (α := α) n s] arg).Terminates := by step; step
 
 /-- `capture emp r` terminates iff `r` terminates -/
-theorem capture_terminates {n : ℕ}
+theorem terminates_capture {n : ℕ}
     : [/(‹n› ⟨r⟩)/].Terminates w s cap ↔ r.Terminates w s cap := by
   constructor <;> intro term
   · rw [Terminates, initMatchPartial] at term
@@ -345,25 +345,25 @@ theorem capture_terminates {n : ℕ}
   · rw [Terminates, initMatchPartial]
     step
     run_top!
-    exact ⟨term, Action.capture_terminates⟩
+    exact ⟨term, Action.terminates_capture⟩
 
 theorem matchPartial_bot
-    : matchPartial [/⊥/] w s cap bot_terminates = [] := by
+    : matchPartial [/⊥/] w s cap terminates_bot = [] := by
   simp only [matchPartial_eq_run]; step; step
 
 theorem matchPartial_empty
-    : matchPartial [//] w s cap empty_terminates
+    : matchPartial [//] w s cap terminates_empty
     = [(s, cap)] := by
   simp only [matchPartial_eq_run]; step; step
 
 theorem matchPartial_unit {c : α}
-    : matchPartial [/c/] w s cap unit_terminates
+    : matchPartial [/c/] w s cap terminates_unit
       = if w[s]? = some c then [(s + 1, cap)] else [] := by
   simp only [matchPartial_eq_run]; step; step
 
 theorem Action.concat_run {old new arg : PartialMatches}
     (term : ∀ mat ∈ old, r.Terminates w mat.1 mat.2)
-    : (mk [.concat r w s old new] arg).run (concat_terminates.mpr term)
+    : (mk [.concat r w s old new] arg).run (terminates_concat.mpr term)
       = new ++ arg ++
       (old.pmap (fun ent rt ↦ r.matchPartial w ent.1 ent.2 rt) term).flatten := by
   induction old generalizing new arg with | nil => step; step | cons ent mat ind =>
@@ -378,7 +378,7 @@ theorem Action.concat_run {old new arg : PartialMatches}
 
 theorem Action.concatWait_run {q r : Regex α} {arg : PartialMatches}
     (term : ∀ mat ∈ arg, r.Terminates w mat.1 mat.2)
-    : (mk [.concatWait q r w s] arg).run (concatWait_terminates.mpr term)
+    : (mk [.concatWait q r w s] arg).run (terminates_concatWait.mpr term)
       = (arg.pmap (fun ent rt ↦ r.matchPartial w ent.1 ent.2 rt) term).flatten := by
   step
   cases arg with | nil => step | cons ent mat =>
@@ -389,50 +389,50 @@ theorem Action.concatWait_run {q r : Regex α} {arg : PartialMatches}
 theorem matchPartial_concat (q r : Regex α) (s : ℕ) (cap : Captures)
     {term : [/⟨q⟩ ⟨r⟩/].Terminates w s cap}
     : matchPartial [/⟨q⟩ ⟨r⟩/] w s cap term
-      = ((q.matchPartial w s cap (concat_terminates.mp term).1).pmap
+      = ((q.matchPartial w s cap (terminates_concat.mp term).1).pmap
           (fun ent rt ↦ r.matchPartial w ent.1 ent.2 rt)
-            (concat_terminates.mp term).2).flatten := by
+            (terminates_concat.mp term).2).flatten := by
   rw [matchPartial]
   simp only [initMatchPartial]
   step
   run_top!
   rw! [← matchPartial_eq_run]
-  rw [Action.concatWait_run (concat_terminates.mp term).2]
+  rw [Action.concatWait_run (terminates_concat.mp term).2]
 
 theorem Action.or_run {s : ℕ} {fst arg : PartialMatches}
-    : (mk [.or (α := α) s fst] arg).run or_terminates = fst ++ arg := by step; step
+    : (mk [.or (α := α) s fst] arg).run terminates_or = fst ++ arg := by step; step
 
 theorem Action.orWait_run {r : Regex α} {s : ℕ} {cap : Captures}
     {arg : PartialMatches} (term : r.Terminates w s cap)
-    : (mk [.orWait r w s cap] arg).run (orWait_terminates.mpr term)
+    : (mk [.orWait r w s cap] arg).run (terminates_orWait.mpr term)
       = arg ++ r.matchPartial w s cap term := by step; run_top!; step; step; rfl
 
 theorem matchPartial_or {q r : Regex α}
     {term : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap}
     : matchPartial [/⟨q⟩ | ⟨r⟩/] w s cap term
-      = q.matchPartial w s cap (or_terminates.mp term).1 ++
-        r.matchPartial w s cap (or_terminates.mp term).2 := by
+      = q.matchPartial w s cap (terminates_or.mp term).1 ++
+        r.matchPartial w s cap (terminates_or.mp term).2 := by
   rw [matchPartial]
   simp only [initMatchPartial]
   step
   run_top!
-  rw [Action.orWait_run (or_terminates.mp term).2]
+  rw [Action.orWait_run (terminates_or.mp term).2]
   rfl
 
 theorem mem_matchPartial_or_comm {q r : Regex α}
     {term : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap} {mat}
     : mat ∈ matchPartial [/⟨q⟩ | ⟨r⟩/] w s cap term ↔
-      mat ∈ matchPartial [/⟨r⟩ | ⟨q⟩/] w s cap (or_terminates_comm.mp term) := by
+      mat ∈ matchPartial [/⟨r⟩ | ⟨q⟩/] w s cap (terminates_or_comm.mp term) := by
   simp only [matchPartial_or, List.mem_append]; rw [or_comm]
 
 theorem Action.filterEmpty_run {emp : Bool} {arg : PartialMatches}
-    : (mk [.filterEmpty (α := α) emp s] arg).run filterEmpty_terminates
+    : (mk [.filterEmpty (α := α) emp s] arg).run terminates_filterEmpty
       = arg.filter fun ent => (s ≥ ent.1) = emp := by step; step
 
 theorem matchPartial_filterEmpty (emp : Bool)
     {term : [/⟨r⟩ ‹emp›ε/].Terminates w s cap}
     : matchPartial [/⟨r⟩ ‹emp›ε/] w s cap term =
-      (r.matchPartial w s cap (filterEmpty_terminates.mp term)).filter
+      (r.matchPartial w s cap (terminates_filterEmpty.mp term)).filter
         fun ent ↦ (s ≥ ent.1) = emp := by
   rw [matchPartial]
   simp only [initMatchPartial]
@@ -451,7 +451,7 @@ theorem matchPartial_star_lazy_terminates'
       [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*?)/].Terminates w s cap := by
   simp only [Terminates, initMatchPartial]; conv_lhs => step
 
-theorem star_terminates' {t : StarType}
+theorem terminates_star' {t : StarType}
     : [/⟨r⟩*‹t›/].Terminates w s cap ↔ match t with
       | .greedy => [/(⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*) | ε/].Terminates w s cap
       | .lazy => [/ε | (⟨r⟩ •ε | (⟨r⟩ -ε) ⟨r⟩*?)/].Terminates w s cap := by
@@ -463,7 +463,7 @@ theorem star_terminates' {t : StarType}
 
 /-- `star t r` terminates iff `r` terminates and `r` terminates for every
 advancing end position and match provided by `r` -/
-theorem star_terminates {t : StarType}
+theorem terminates_star {t : StarType}
     : [/⟨r⟩*‹t›/].Terminates w s cap ↔ (term : r.Terminates w s cap) ∧
       ∀ mat ∈ r.matchPartial w s cap term,
         s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
@@ -472,18 +472,18 @@ theorem star_terminates {t : StarType}
   cases t with
   | greedy =>
     simp only
-    rw [← matchPartial_terminates_iff, or_terminates,
-      or_terminates] at ⊢
-    rw! [filterEmpty_terminates, concat_terminates,
-      filterEmpty_terminates]
-    simp [dand_iff_and_forall, empty_terminates, matchPartial_filterEmpty]
+    rw [← matchPartial_terminates_iff, terminates_or,
+      terminates_or] at ⊢
+    rw! [terminates_filterEmpty, terminates_concat,
+      terminates_filterEmpty]
+    simp [dand_iff_and_forall, terminates_empty, matchPartial_filterEmpty]
   | lazy =>
     simp only
-    rw [← matchPartial_terminates_iff, or_terminates,
-      or_terminates] at ⊢
-    rw! [filterEmpty_terminates, concat_terminates,
-      filterEmpty_terminates]
-    simp [dand_iff_and_forall, empty_terminates, matchPartial_filterEmpty]
+    rw [← matchPartial_terminates_iff, terminates_or,
+      terminates_or] at ⊢
+    rw! [terminates_filterEmpty, terminates_concat,
+      terminates_filterEmpty]
+    simp [dand_iff_and_forall, terminates_empty, matchPartial_filterEmpty]
 
 theorem matchPartial_star {t : StarType}
     (term : [/⟨r⟩*‹t›/].Terminates w s cap)
@@ -497,23 +497,23 @@ theorem matchPartial_star {t : StarType}
   split <;> conv_lhs => step
 
 theorem matchPartial_start
-    : matchPartial [/⊢/] w s cap start_terminates
+    : matchPartial [/⊢/] w s cap terminates_start
       = if s = 0 then [(s, cap)] else [] := by
   simp only [matchPartial_eq_run]; step; step
 
 theorem matchPartial_end'
-    : matchPartial [/⊣/] w s cap end'_terminates
+    : matchPartial [/⊣/] w s cap terminates_end'
       = if s = w.length then [(s, cap)] else [] := by
   simp only [matchPartial_eq_run]; step; step
 
 theorem Action.capture_run {n : ℕ} {arg : PartialMatches}
-    : (mk [.capture (α := α) n s] arg).run capture_terminates
+    : (mk [.capture (α := α) n s] arg).run terminates_capture
       = arg.map fun ent ↦ (ent.1, ent.2.update n [(s, ent.1)]) := by step; step
 
 theorem matchPartial_capture {n : ℕ}
     (term : [/(‹n› ⟨r⟩)/].Terminates w s cap)
     : matchPartial [/(‹n› ⟨r⟩)/] w s cap term =
-      (r.matchPartial w s cap (capture_terminates.mp term)).map
+      (r.matchPartial w s cap (terminates_capture.mp term)).map
         fun ent ↦ (ent.1, ent.2.update n [(s, ent.1)]) := by
   rw [matchPartial]
   simp only [initMatchPartial]
@@ -526,16 +526,16 @@ theorem matchPartial_capture {n : ℕ}
 theorem list_terminates {l : List α}
     : (list l).Terminates w s cap := by
   induction l generalizing s with
-  | nil => rw [list]; exact empty_terminates
+  | nil => rw [list]; exact terminates_empty
   | cons a as ind =>
-    rw [list, concat_terminates]
+    rw [list, terminates_concat]
     simp only [matchPartial_unit, List.mem_ite_nil_right, List.mem_cons, List.not_mem_nil, or_false,
-      and_imp, forall_eq_apply_imp_iff, dand_iff_and_forall, unit_terminates, forall_const,
+      and_imp, forall_eq_apply_imp_iff, dand_iff_and_forall, terminates_unit, forall_const,
       true_and]
     exact fun _ ↦ ind
 
 /-- `backref` always terminates -/
-theorem backref_terminates {d : BackrefDefault} {n : ℕ}
+theorem terminates_backref {d : BackrefDefault} {n : ℕ}
     : [/\‹d›n/].Terminates w s cap := by
   rw [matchPartial_terminates_iff]
   step
@@ -574,7 +574,7 @@ theorem matchPartial_list {l : List α}
     · simp [List.drop_eq_nil_of_le h']
 
 theorem matchPartial_backref {n : ℕ} {d : BackrefDefault}
-    : matchPartial [/\‹d›n/] w s cap backref_terminates =
+    : matchPartial [/\‹d›n/] w s cap terminates_backref =
       match (cap n).head? with
       | none => match d with | .bot => [] | .empty => [(s, cap)]
       | some (cs, ct) => if w.extract s (s + (w.extract cs ct).length) = w.extract cs ct
@@ -593,152 +593,8 @@ theorem matchPartial_backref {n : ℕ} {d : BackrefDefault}
 
 end MatchPartial
 
-section Tactic
-
-open Lean Parser Tactic
-
-macro "termination" : tactic =>
-  `(tactic| (repeat simp [
-    bot_terminates, empty_terminates, unit_terminates, concat_terminates,
-    or_terminates, filterEmpty_terminates, start_terminates, end'_terminates,
-    capture_terminates, backref_terminates, star_terminates_of_forall];
-    ))
-
-end Tactic
-
 --/-- A proof of termination can be extracted from a matchPartial -/
 --def mem_matchPartial_terminates {r : Regex α} {w} {s} {cap} {term} {mat}
 --    (_ : mat ∈ r.matchPartial w s cap term) : r.Terminates w s cap := term
-
-/-- Returns all matches that end at the end of the string -/
-def match' (r : Regex α) (w : List α) (term : r.Terminates w 0 0) :
-  PartialMatches := [/⟨r⟩ ⊣/].matchPartial w 0 0
-    (concat_terminates.mpr ⟨term, fun _ _ ↦ end'_terminates⟩)
-
-theorem match'_def {r : Regex α} {w : List α} (term : r.Terminates w 0 0)
-    : r.match' w term = (r.matchPartial w 0 0 term).filter fun mat ↦ mat.1 = w.length := by
-  rw [match', matchPartial_concat]
-  simp only [matchPartial_end', Prod.mk.eta, List.pmap_eq_map]
-  rw [← List.flatMap_def, ← List.filterMap_eq_filter, List.filterMap_eq_flatMap_toList]
-  simp only [Option.guard_apply, decide_eq_true_eq]
-  congr; ext mat n mat'
-  split <;> simp
-
-/-- Returns whether the whole sequence matches the regex -/
-def isMatch (r : Regex α) (w : List α) (term : r.Terminates w 0 0) :=
-  ¬(r.match' w term).isEmpty
-
-/-- `⊥` never matches -/
-theorem isMatch_bot : ¬[/⊥/].isMatch w bot_terminates := by
-  simp [isMatch, match'_def, matchPartial_bot]
-
-/-- The empty regex matches only the empty string -/
-theorem isMatch_empty : [//].isMatch w empty_terminates ↔ w = [] := by
-  simp only [isMatch, match'_def, matchPartial_empty, List.isEmpty_iff, List.filter_eq_nil_iff,
-    List.mem_cons, List.not_mem_nil, or_false, decide_eq_true_eq, forall_eq, Decidable.not_not]
-  rw [eq_comm, List.length_eq_zero_iff]
-
-/-- A unit regex matches only the singleton sequence that has that unit -/
-theorem isMatch_unit {c : α} : [/`‹c›/].isMatch w unit_terminates ↔ w = [c] := by
-  simp only [isMatch, match'_def, matchPartial_unit, zero_add, List.isEmpty_iff,
-    List.filter_eq_nil_iff, List.mem_ite_nil_right, List.mem_cons, List.not_mem_nil, or_false,
-    decide_eq_true_eq, and_imp, forall_eq_apply_imp_iff, Classical.not_imp, Decidable.not_not]
-  rw [eq_comm (a := 1), List.length_eq_one_iff, List.getElem?_eq_some_iff]
-  constructor
-  · rintro ⟨⟨lt, eqc⟩, ⟨c', eqc'⟩⟩
-    simp only [eqc', List.getElem_cons_zero, List.cons.injEq, and_true] at eqc ⊢
-    exact eqc
-  · intro wc; simp [wc]
-
-/-- An alternation between `q` and `r` matches iff `q` matches or `r` matches -/
-theorem isMatch_or {q r : Regex α} (term : [/⟨q⟩ | ⟨r⟩/].Terminates w 0 0)
-    : [/⟨q⟩ | ⟨r⟩/].isMatch w term ↔
-      q.isMatch w (or_terminates.mp term).1 ∨ r.isMatch w (or_terminates.mp term).2 := by
-  simp [isMatch, match'_def, matchPartial_or, imp_iff_not_or]
-
-theorem decide_eq_bool {p : Prop} [Decidable p] {b : Bool}
-    : decide p = b ↔ (p ↔ b = true) := by cases b <;> simp
-
-theorem isMatch_filterEmpty {e : Bool} {r : Regex α}
-    (term : [/⟨r⟩ ‹e›ε/].Terminates w 0 0)
-    : [/⟨r⟩ ‹e›ε/].isMatch w term ↔
-      r.isMatch w (filterEmpty_terminates.mp term) ∧ (w.length = 0) = e := by
-  simp [isMatch, match'_def, matchPartial_filterEmpty, decide_eq_bool]
-
--- Some silly ones
-
-/-- The start anchor full-matches only the empty sequence -/
-theorem isMatch_start : [/⊢/].isMatch w start_terminates ↔ w = [] := by
-  simp only [isMatch, match'_def, matchPartial_start, ↓reduceIte, List.isEmpty_iff,
-    List.filter_eq_nil_iff, List.mem_cons, List.not_mem_nil, or_false, decide_eq_true_eq, forall_eq,
-    Decidable.not_not]
-  rw [eq_comm, List.length_eq_zero_iff]
-
-/-- The end anchor full-matches only the empty sequence -/
-theorem isMatch_end' : [/⊣/].isMatch w end'_terminates ↔ w = [] := by
-  simp only [isMatch, match'_def, matchPartial_end', List.isEmpty_iff, List.filter_eq_nil_iff,
-    List.mem_ite_nil_right, List.mem_cons, List.not_mem_nil, or_false, decide_eq_true_eq, and_imp,
-    forall_eq_apply_imp_iff, imp_not_self, Decidable.not_not]
-  rw [eq_comm, List.length_eq_zero_iff]
-
-/-- A capture of `r` matches iff `r` matches -/
-theorem isMatch_capture {n : ℕ} {r : Regex α} (term : [/(‹n› ⟨r⟩)/].Terminates w 0 0)
-    : [/(‹n› ⟨r⟩)/].isMatch w term ↔ r.isMatch w (capture_terminates.mp term) := by
-  simp [isMatch, match'_def, matchPartial_capture]
-
-/-- A full-match on a backref just defaults -/
-theorem isMatch_backref {d : BackrefDefault} {n : ℕ}
-    : [/\‹d›n/].isMatch w backref_terminates ↔ match d with
-        | .bot => False
-        | .empty => w = [] := by
-  simp [isMatch, match'_def, matchPartial_backref]
-  split <;> simp
-
-def language (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
-  : Language α := {w | isMatch r w (term w)}
-
-theorem language_bot : ([/⊥/] : Regex α).language (fun _ ↦ bot_terminates) = 0 := by
-  simp [language, isMatch_bot]
-  rfl
-
-theorem language_empty : ([//] : Regex α).language (fun _ ↦ empty_terminates) = {[]} := by
-  simp [language, isMatch_empty]
-
-theorem language_unit {c : α} : [/c/].language (fun _ ↦ unit_terminates) = {[c]} := by
-  simp [language, isMatch_unit]
-
-theorem language_or {q r : Regex α} (term : ∀ w, [/⟨q⟩ | ⟨r⟩/].Terminates w 0 0)
-  : [/⟨q⟩ | ⟨r⟩/].language term
-    = q.language (fun _ ↦ (or_terminates.mp (term _)).1) +
-      r.language (fun _ ↦ (or_terminates.mp (term _)).2) := by
-  simp [language, isMatch_or, Language.add_def, Set.union_def]
-
-theorem language_filterEmpty {e : Bool} {r : Regex α}
-    (term : ∀ w, [/⟨r⟩ ‹e›ε/].Terminates w 0 0)
-    : ([/⟨r⟩ ‹e›ε/] : Regex α).language term = if e then
-        r.language (fun _ ↦ filterEmpty_terminates.mp (term _)) ⊓ {[]} else
-        r.language (fun _ ↦ filterEmpty_terminates.mp (term _)) - {[]} := by
-  simp only [language, isMatch_filterEmpty, List.length_eq_zero_iff, eq_iff_iff]
-  split <;> (expose_names; simp only [h, iff_true, Bool.false_eq_true, iff_false])
-  · ext x; rw [Language.mem_inf, Set.setOf_and, Set.mem_inter_iff]; rfl
-  · ext x; rw [Language.mem_sub, Set.setOf_and, Set.mem_inter_iff]; rfl
-
-theorem language_start : ([/⊢/] : Regex α).language (fun _ ↦ start_terminates) = {[]} := by
-  simp [language, isMatch_start]
-
-theorem language_end' : ([/⊣/] : Regex α).language (fun _ ↦ end'_terminates) = {[]} := by
-  simp [language, isMatch_end']
-
-theorem language_capture {n : ℕ} {r : Regex α} (term : ∀ w, [/(‹n› ⟨r⟩)/].Terminates w 0 0)
-    : ([/(‹n› ⟨r⟩)/] : Regex α).language term =
-      r.language (fun _ ↦ capture_terminates.mp (term _)) := by
-  simp [language, isMatch_capture]
-
-theorem language_backref {d : BackrefDefault} {n : ℕ}
-    : ([/\‹d›n/] : Regex α).language (fun _ ↦ backref_terminates) = match d with
-      | .bot => 0
-      | .empty => {[]} := by
-  simp [language, isMatch_backref]
-  split <;> simp; rfl
 
 end Regex

@@ -1,7 +1,7 @@
 import Regex.Basic
 
 /-! Lemmas about the bounds of matches. We also prove a convenient conditional
-version of `star_terminates` -/
+version of `terminates_star` -/
 
 namespace Regex
 
@@ -149,13 +149,13 @@ theorem endInBounds : r.EndInBounds := by
 
 /-- `star t r` terminates if (but not only if)
 `r` terminates for every capture and for every position starting from here -/
-theorem star_terminates_of_forall {t : StarType}
+theorem terminates_star_of_forall {t : StarType}
     : (∀ s' ≥ s, ∀ cap', r.Terminates w s' cap') →
       [/⟨r⟩*‹t›/].Terminates w s cap := by
   intro term
   induction h : w.length - s using Nat.strongRec generalizing s cap with
   | ind n ind =>
-    rw [star_terminates]
+    rw [terminates_star]
     refine ⟨term s (le_refl _) cap, fun mat mem lt ↦ ?_⟩
     simp only [← h] at ind
     by_cases! h : s < w.length
@@ -165,15 +165,15 @@ theorem star_terminates_of_forall {t : StarType}
       exact (ne_of_lt lt eq).elim
 
 /-- The star type is interchangeable in a `Terminates` assertion -/
-theorem star_terminates_greedy_iff_lazy
+theorem terminates_star_greedy_iff_lazy
     : [/⟨r⟩*/].Terminates w s cap ↔ [/⟨r⟩*?/].Terminates w s cap := by
   by_cases! sle : s ≤ w.length
   focus induction s, sle using decreasingStrongRec generalizing cap
   all_goals (
-    simp only [star_terminates']
-    rw [or_terminates_comm]
-    simp only [or_terminates, filterEmpty_terminates, concat_terminates,
-      matchPartial_filterEmpty, empty_terminates, true_and]
+    simp only [terminates_star']
+    rw [terminates_or_comm]
+    simp only [terminates_or, terminates_filterEmpty, terminates_concat,
+      matchPartial_filterEmpty, terminates_empty, true_and]
     rw [iff_iff_eq]; congr; ext term
     simp only [ge_iff_le, Bool.false_eq_true, eq_iff_iff, iff_false, not_le, List.mem_filter,
       decide_eq_true_eq, and_imp, Prod.forall])
@@ -192,7 +192,7 @@ theorem star_terminates_greedy_iff_lazy
 are the same. -/
 theorem mem_matchPartial_star_greedy_iff_lazy {term : [/⟨r⟩*/].Terminates w s cap} {mat}
     : mat ∈ [/⟨r⟩*/].matchPartial w s cap term ↔
-      mat ∈ [/⟨r⟩*?/].matchPartial w s cap (star_terminates_greedy_iff_lazy.mp term) := by
+      mat ∈ [/⟨r⟩*?/].matchPartial w s cap (terminates_star_greedy_iff_lazy.mp term) := by
   by_cases! sle : s ≤ w.length
   focus induction s, sle using decreasingStrongRec generalizing cap
   all_goals (
@@ -211,7 +211,7 @@ theorem mem_matchPartial_star_greedy_iff_lazy {term : [/⟨r⟩*/].Terminates w 
       first | rw [ind _ bound mem.2] at mem' | rw [← ind _ bound mem.2] at mem'
       exact ⟨_, mem, mem'⟩)
     generalize_proofs term' at mem'
-    exact star_terminates_greedy_iff_lazy.mpr term'
+    exact terminates_star_greedy_iff_lazy.mpr term'
   · constructor <;> (
       rintro ⟨cap', mem, mem'⟩
       have bound := matchPartial_outOfBounds_eq (le_of_lt sle) mem.1
@@ -221,7 +221,7 @@ theorem mem_matchPartial_star_greedy_iff_lazy {term : [/⟨r⟩*/].Terminates w 
 are the same. (lazy to greedy version, because a terminator is required) -/
 theorem mem_matchPartial_star_lazy_iff_greedy {term : [/⟨r⟩*?/].Terminates w s cap} {mat}
     : mat ∈ [/⟨r⟩*?/].matchPartial w s cap term ↔
-      mat ∈ [/⟨r⟩*/].matchPartial w s cap (star_terminates_greedy_iff_lazy.mpr term) := by
+      mat ∈ [/⟨r⟩*/].matchPartial w s cap (terminates_star_greedy_iff_lazy.mpr term) := by
   rw [mem_matchPartial_star_greedy_iff_lazy]
 
 end Regex
