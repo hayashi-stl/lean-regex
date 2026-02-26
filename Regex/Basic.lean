@@ -10,6 +10,14 @@ import Regex.Util
 
 namespace Regex
 
+def decreasingStrongRec {n : ℕ} {motive : (m : ℕ) → m ≤ n → Sort u}
+    (ind : ∀ m, (mn : m ≤ n) →
+      (∀ k, (kn : k ≤ n) → (km : k > m) → motive k kn) →
+      motive m mn)
+    (m : ℕ) (mn : m ≤ n)
+    : motive m mn :=
+  ind m mn fun k kn _ ↦ decreasingStrongRec ind k kn
+
 variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
   {s : ℕ} {cap : Captures}
 
@@ -294,6 +302,11 @@ theorem or_terminates {q r : Regex α}
     run_top! using qterm
     exact Action.orWait_terminates.mpr rterm
 
+/-- `or` termination is symmetric -/
+theorem or_terminates_comm {q r : Regex α}
+    : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap ↔ [/⟨r⟩ | ⟨q⟩/].Terminates w s cap := by
+  simp only [or_terminates]; rw [and_comm]
+
 theorem Action.filterEmpty_terminates {emp : Bool} {arg : PartialMatches}
     : (MatchStack.mk [filterEmpty (α := α) emp s] arg).Terminates := by step; step
 
@@ -405,6 +418,12 @@ theorem matchPartial_or {q r : Regex α}
   run_top!
   rw [Action.orWait_run (or_terminates.mp term).2]
   rfl
+
+theorem mem_matchPartial_or_comm {q r : Regex α}
+    {term : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap} {mat}
+    : mat ∈ matchPartial [/⟨q⟩ | ⟨r⟩/] w s cap term ↔
+      mat ∈ matchPartial [/⟨r⟩ | ⟨q⟩/] w s cap (or_terminates_comm.mp term) := by
+  simp only [matchPartial_or, List.mem_append]; rw [or_comm]
 
 theorem Action.filterEmpty_run {emp : Bool} {arg : PartialMatches}
     : (mk [.filterEmpty (α := α) emp s] arg).run filterEmpty_terminates
@@ -586,6 +605,10 @@ macro "termination" : tactic =>
     ))
 
 end Tactic
+
+--/-- A proof of termination can be extracted from a matchPartial -/
+--def mem_matchPartial_terminates {r : Regex α} {w} {s} {cap} {term} {mat}
+--    (_ : mat ∈ r.matchPartial w s cap term) : r.Terminates w s cap := term
 
 /-- Returns all matches that end at the end of the string -/
 def match' (r : Regex α) (w : List α) (term : r.Terminates w 0 0) :

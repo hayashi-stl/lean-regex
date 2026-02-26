@@ -6,9 +6,9 @@ theorem min_or {α : Type*} [LinearOrder α] (a b : α)
 --protected theorem Nat.sub_lt_sub_iff_left {a b c : Nat}
 --  (h : c ≤ a) : a - c < b - c ↔ a < b := by omega
 
-namespace Regex
-
 variable {α : Type u} [deq : DecidableEq α] {w : List α}
+
+namespace Regex
 
 -- No more Icc. Too much dependent type hell.
 
@@ -322,30 +322,74 @@ variable {α : Type u} [deq : DecidableEq α] {w : List α}
 --
 --end Icc
 --
---omit deq in
---/-- Pasting two extracts together where the second one starts where the
---first one ends -/
---@[simp] theorem _root_.List.extract_append_extract' {s t u : ℕ}
---    (hs : s ≤ t) (ht : t ≤ u) (hu : u ≤ w.length)
---    : w.extract s t ++ w.extract t u = w.extract s u := by
---  simp only [List.extract_eq_drop_take]
---  rw (occs := [1, 3]) [← List.take_append_drop u w]
---  rw [List.drop_append]
---  rw [List.take_append_of_le_length ?st, List.take_append_of_le_length ?su];
---  case st | su =>
---    simp only [List.length_drop, List.length_take, tsub_le_iff_right, min_eq_left_iff.mpr hu]
---    rw [Nat.sub_add_cancel] <;> first | exact le_refl _ | assumption | exact .trans hs ht
---  rw [List.take_drop (i := u - t), List.drop_take, ← List.extract_eq_drop_take,
---    Nat.add_sub_cancel' ht]
---  rw (occs := [2]) [← List.take_append_drop s w]
---  rw [List.take_append, List.take_take (i := u), min_eq_right_iff.mpr (.trans hs ht),
---    List.length_take, min_eq_left_iff.mpr (.trans hs <| .trans ht hu),
---    List.drop_append, List.drop_eq_nil_iff.mpr]; rotate_right
---  · simp only [List.length_take, inf_le_iff]; exact Or.inl hs
---  simp only [List.extract_eq_drop_take, List.length_take, List.nil_append,
---    min_eq_left_iff.mpr (.trans hs <| .trans ht hu)]
---  rw [← List.extract_eq_drop_take, List.take_append_drop]
---  simp
+
+end Regex
+namespace Nat
+
+theorem le_sub_add (n k : ℕ) : n ≤ n - k + k := by
+  by_cases! h : k ≤ n
+  · rw [Nat.sub_add_cancel h]
+  · rw [Nat.sub_eq_zero_of_le (le_of_lt h), zero_add]
+    exact le_of_lt h
+
+end Nat
+namespace List
+
+omit deq in
+/-- Pasting two extracts together where the second one starts where the
+first one ends -/
+@[simp] theorem extract_append_extract' (w : List α) {s t u : ℕ}
+    (hs : s ≤ t) (ht : t ≤ u) (hu : u ≤ w.length)
+    : w.extract s t ++ w.extract t u = w.extract s u := by
+  simp only [List.extract_eq_drop_take]
+  rw (occs := [1, 3]) [← List.take_append_drop u w]
+  rw [List.drop_append]
+  rw [List.take_append_of_le_length ?st, List.take_append_of_le_length ?su];
+  case st | su =>
+    simp only [List.length_drop, List.length_take, tsub_le_iff_right, min_eq_left_iff.mpr hu]
+    rw [Nat.sub_add_cancel] <;> first | exact le_refl _ | assumption | exact .trans hs ht
+  rw [List.take_drop (i := u - t), List.drop_take, ← List.extract_eq_drop_take,
+    Nat.add_sub_cancel' ht]
+  rw (occs := [2]) [← List.take_append_drop s w]
+  rw [List.take_append, List.take_take (i := u), min_eq_right_iff.mpr (.trans hs ht),
+    List.length_take, min_eq_left_iff.mpr (.trans hs <| .trans ht hu),
+    List.drop_append, List.drop_eq_nil_iff.mpr]; rotate_right
+  · simp only [List.length_take, inf_le_iff]; exact Or.inl hs
+  simp only [List.extract_eq_drop_take, List.length_take, List.nil_append,
+    min_eq_left_iff.mpr (.trans hs <| .trans ht hu)]
+  rw [← List.extract_eq_drop_take, List.take_append_drop]
+  simp
+
+omit deq in
+/-- If the end of an extract is out of bounds, the extract is bounded
+at the length of the list instead -/
+@[simp] theorem extract_right (w : List α) (s : ℕ) {t : ℕ} (h : w.length ≤ t)
+    : w.extract s t = w.extract s w.length := by
+  simp only [extract_eq_drop_take, take_eq_take_iff, length_drop, min_self, inf_eq_right,
+    tsub_le_iff_right]
+  exact (.trans h (Nat.le_sub_add _ _))
+
+omit deq in
+/-- If the start of an extract is out of bounds, the result is nil -/
+@[simp] theorem extract_left (w : List α) {s : ℕ} (t : ℕ) (h : w.length ≤ s)
+    : w.extract s t = [] := by
+  simp only [extract_eq_drop_take, take_eq_nil_iff, drop_eq_nil_iff]
+  exact Or.inr h
+
+omit deq in
+/-- Pasting two extracts together where the second one starts where the
+first one ends, even if some indices are out of bounds, as long as they're
+monotonically increasing -/
+@[simp] theorem extract_append_extract (w : List α) {s t u : ℕ}
+    (hs : s ≤ t) (ht : t ≤ u)
+    : w.extract s t ++ w.extract t u = w.extract s u := by
+  by_cases! hu : u ≤ w.length
+  · exact extract_append_extract' w hs ht hu
+  rw [extract_right _ _ (le_of_lt hu), extract_right _ _ (le_of_lt hu)]
+  by_cases! ht : t ≤ w.length
+  · exact extract_append_extract' w hs ht (le_refl _)
+  rw [extract_left _ _ (le_of_lt ht), extract_right _ _ (le_of_lt ht), append_nil]
+
 --
 --omit deq in
 --@[simp] theorem _root_.List.extract_append_extract {s t u : Pos w}
@@ -353,20 +397,18 @@ variable {α : Type u} [deq : DecidableEq α] {w : List α}
 --    w.extract s.val t.val ++ w.extract t.val u.val = w.extract s.val u.val :=
 --  List.extract_append_extract' (Icc.val_le_val.mp hs) (Icc.val_le_val.mp ht) u.is_le
 --
---omit deq in
---theorem _root_.List.extract_append_extract_assoc_right {s t u : Pos w}
---    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
---    : wa ++ w.extract s.val t.val ++ (w.extract t.val u.val ++ wb) =
---      wa ++ w.extract s.val u.val ++ wb := by
---  rw [← List.append_assoc, List.append_assoc wa, List.extract_append_extract hs ht]
---
---omit deq in
---theorem _root_.List.extract_append_extract_assoc_left {s t u : Pos w}
---    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
---    : (wa ++ w.extract s.val t.val) ++ w.extract t.val u.val ++ wb =
---      wa ++ w.extract s.val u.val ++ wb := by
---  rw [List.append_assoc wa, List.extract_append_extract hs ht]
---
+omit deq in
+theorem extract_append_extract_assoc_right (w : List α) {s t u : ℕ}
+    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
+    : wa ++ w.extract s t ++ (w.extract t u ++ wb) = wa ++ w.extract s u ++ wb := by
+  rw [← List.append_assoc, List.append_assoc wa, List.extract_append_extract w hs ht]
+
+omit deq in
+theorem extract_append_extract_assoc_left (w : List α) {s t u : ℕ}
+    (hs : s ≤ t) (ht : t ≤ u) (wa wb)
+    : (wa ++ w.extract s t) ++ w.extract t u ++ wb = wa ++ w.extract s u ++ wb := by
+  rw [List.append_assoc wa, List.extract_append_extract w hs ht]
+
 --namespace Icc
 --
 --omit deq in
@@ -422,6 +464,9 @@ variable {α : Type u} [deq : DecidableEq α] {w : List α}
 --  simp [List.extract_append_extract_assoc hs ht]
 --
 --end Icc
+
+end List
+namespace Regex
 
 --def Pos (w : List α) := Icc 0 w.length
 --  deriving LE, LT, DecidableEq, DecidableLE, DecidableLT, Repr
