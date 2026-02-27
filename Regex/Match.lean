@@ -22,10 +22,10 @@ theorem mem_matchPartial_star {t : StarType} {s} {cap}
 private theorem mem_matchPartial_star'α {t : StarType} {s} {cap}
     (term : [/⟨r⟩*‹t›/].Terminates w s cap) {mat}
     : mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term →
-      ∃ (ls : PartialMatches) (nemp : ls ≠ []),
+      ∃ (ls : List (ℕ × Captures)) (nemp : ls ≠ []),
         ls.head nemp = (s, cap) ∧ ls.getLast nemp = mat ∧
         ∀ (i : _) (h : i + 1 < ls.length),
-          (term' : r.Terminates w ls[i].1 ls[i].2) ∧
+          ∃ term' : r.Terminates w ls[i].1 ls[i].2,
           ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term' ∧
           (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1) := by
   revert term; rw! [terminates_star_iff_greedy]; intro term
@@ -39,10 +39,8 @@ private theorem mem_matchPartial_star'α {t : StarType} {s} {cap}
           List.getLast_singleton, List.length_cons, List.length_nil, zero_add, Nat.reduceAdd,
           List.getElem_cons_succ, List.getElem_singleton, true_and, reduceCtorEq, exists_const]
         intro i i0
-        simp [show i = 0 by linarith, dand_iff_and_forall]
-        --rw [exists_prop]
-        suffices r.Terminates w s cap by simpa [show i = 0 by linarith]
-        exact (terminates_star.mp term).1
+        simp only [show i = 0 by linarith, List.getElem_cons_zero, zero_add, true_or, and_true]
+        exact ⟨(terminates_star.mp term).1, mem.1⟩
       · have ⟨ls', nemp', fst', lst', conn'⟩ :=
           ind _ (endInBounds _ _ sle _ _ _ mem.1) mem.2
           ((terminates_star.mp term).2 _ mem.1 mem.2) mem'
@@ -52,8 +50,7 @@ private theorem mem_matchPartial_star'α {t : StarType} {s} {cap}
           true_and, ne_eq, reduceCtorEq, not_false_eq_true, exists_const]
         intro i ilt
         cases i with
-        | zero => simp [List.getElem_zero_eq_head, fst', dand_iff_and_forall,
-            (terminates_star.mp term).1, mem]
+        | zero => simp [List.getElem_zero_eq_head, fst', (terminates_star.mp term).1, mem]
         | succ i =>
           specialize conn' i ilt
           simp only [List.getElem_cons_succ]
@@ -67,28 +64,28 @@ private theorem mem_matchPartial_star'α {t : StarType} {s} {cap}
         Nat.add_eq_right, List.getElem_cons_succ, List.getElem_singleton, true_and, reduceCtorEq,
         exists_const]
       intro i i0
-      suffices r.Terminates w s cap by simpa [show i = 0 by linarith]
-      exact (terminates_star.mp term).1
+      simp only [show i = 0 by linarith, List.getElem_cons_zero, true_or, and_true]
+      exact ⟨(terminates_star.mp term).1, mem.1⟩
     · have bound := matchPartial_outOfBounds_eq (le_of_lt sle) mem.1; simp [bound] at mem
     · use [(s, cap)]; simp [eq]
 
 private theorem mem_matchPartial_star'β {t : StarType} {s} {cap}
     (term : [/⟨r⟩*‹t›/].Terminates w s cap) {mat}
-    : (∃ (ls : PartialMatches) (nemp : ls ≠ []),
+    : (∃ (ls : List (ℕ × Captures)) (nemp : ls ≠ []),
         ls.head nemp = (s, cap) ∧ ls.getLast nemp = mat ∧
         ∀ (i : _) (h : i + 1 < ls.length),
-          (term' : r.Terminates w ls[i].1 ls[i].2) ∧
-          (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1 ∧
-          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term')) →
+          ∃ term' : r.Terminates w ls[i].1 ls[i].2,
+          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term' ∧
+          (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1)) →
       mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term := by
   revert term; rw! [terminates_star_iff_greedy]; intro term
   rw [mem_matchPartial_star_iff_greedy]
   rintro ⟨ls, nemp, fst, lst, conn⟩
   induction ls generalizing s cap mat <;> try contradiction
   rename_i l ls ind
+  rw [mem_matchPartial_star]
   cases ls with
   | nil =>
-    rw [mem_matchPartial_star]
     rw [List.head_singleton] at fst
     simp [fst] at lst
     simp [lst]
@@ -98,10 +95,32 @@ private theorem mem_matchPartial_star'β {t : StarType} {s} {cap}
       forall_true_left, Prod.forall, List.getLast_cons, add_le_add_iff_right,
       Nat.add_right_cancel_iff] at ind fst lst conn
     have conn0 := conn 0 (Nat.zero_le _)
-    simp at conn0
+    simp only [List.getElem_cons_zero, exists_and_right, fst] at conn0
+    have ⟨⟨term', mem⟩, zeq⟩ := conn0
+    by_cases! l'le : l'.1 ≤ s
+    · simp only [not_lt.mpr l'le, or_false] at zeq
+      rw [eq_comm, ← List.eq_nil_iff_length_eq_zero] at zeq
+      simp only [zeq, List.getLast_singleton] at lst
+      exact Or.inl ⟨lst ▸ mem, lst ▸ l'le⟩
+    have term'' := (terminates_star.mp term).2 _ mem l'le
+    specialize ind _ _ term'' rfl lst _
+    · intro i ilt
+      specialize conn (i + 1) (by linarith)
+      simp only [List.getElem_cons_succ, exists_and_right] at conn ⊢
+      exact conn
+    exact Or.inr (Or.inl ⟨_, ⟨mem, l'le⟩, ind⟩)
 
---/-- Non-recursive version of membership of a star match -/
-
+/-- Non-recursive version of membership of a star match -/
+theorem mem_matchPartial_star' {t : StarType} {s} {cap}
+    (term : [/⟨r⟩*‹t›/].Terminates w s cap) {mat}
+    : mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term ↔
+      ∃ (ls : List (ℕ × Captures)) (nemp : ls ≠ []),
+        ls.head nemp = (s, cap) ∧ ls.getLast nemp = mat ∧
+        ∀ (i : _) (h : i + 1 < ls.length),
+          ∃ term' : r.Terminates w ls[i].1 ls[i].2,
+          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term' ∧
+          (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1) :=
+  ⟨mem_matchPartial_star'α term, mem_matchPartial_star'β term⟩
 
 /-! Stuff about full matches -/
 
@@ -199,16 +218,39 @@ theorem isMatch_star {t : StarType} {r : Regex α} (term : [/⟨r⟩*‹t›/].T
     · exact ⟨0, Or.inr (Or.inr ⟨eq, rfl⟩)⟩
     · exact ⟨cap', Or.inr (Or.inl ⟨_, _, ⟨mem, Nat.pos_iff_ne_zero.mp lt⟩, mem'⟩)⟩
 
+theorem isMatch_star_greedy_iff_lazy
+    {r : Regex α} (term : [/⟨r⟩*/].Terminates w 0 0)
+    : [/⟨r⟩*/].IsMatch w term ↔ [/⟨r⟩*?/].IsMatch w
+      (terminates_star_greedy_iff_lazy.mp term) := by
+  rw [isMatch_star, ← isMatch_star (t := .lazy)];
+
+theorem isMatch_star_iff_greedy {t : StarType}
+    {r : Regex α} (term : [/⟨r⟩*‹t›/].Terminates w 0 0)
+    : [/⟨r⟩*‹t›/].IsMatch w term ↔ [/⟨r⟩*/].IsMatch w (terminates_star_iff_greedy.mp term) := by
+  cases t <;> simp [isMatch_star_greedy_iff_lazy]
+
+theorem isMatch_star_iff_lazy {t : StarType}
+    {r : Regex α} (term : [/⟨r⟩*‹t›/].Terminates w 0 0)
+    : [/⟨r⟩*‹t›/].IsMatch w term ↔ [/⟨r⟩*?/].IsMatch w (terminates_star_iff_lazy.mp term) := by
+  cases t <;> simp [isMatch_star_greedy_iff_lazy]
+
 /-- Non-recursive version, stated with a nonempty list -/
 theorem isMatch_star' {t : StarType} {r : Regex α} (term : [/⟨r⟩*‹t›/].Terminates w 0 0)
     : [/⟨r⟩*‹t›/].IsMatch w term ↔
-      ∃ (ls : PartialMatches) (nemp : ls ≠ [])
-          (term' : ∀ (i : _) (h : i < ls.length), r.Terminates w ls[i].1 ls[i].2),
-        (ls.head nemp).1 = 0 ∧ (ls.getLast nemp).1 = w.length ∧
+      ∃ (ls : List (ℕ × Captures)) (nemp : ls ≠ []),
+        ls.head nemp = (0, 0) ∧ (ls.getLast nemp).1 = w.length ∧
         ∀ (i : _) (h : i + 1 < ls.length),
-          ls[i].1 < ls[i + 1].1 ∧
-          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 (term' i (by linarith)) := by
-
+          ∃ term' : r.Terminates w ls[i].1 ls[i].2,
+          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term' ∧
+          (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1) := by
+  rw [IsMatch, match'_def, ne_eq, List.filter_eq_nil_iff]
+  conv in _ ∈ _ => rw [mem_matchPartial_star']
+  push_neg
+  conv in (∃ _, _) ∧ _ => rw [← exists_and_right]
+  conv in (∃ _, _) ∧ _ => rw [← exists_and_right]
+  -- conv stopped working with unknown goal _uniq.321197
+  simp only [and_assoc (c := decide _ = _), and_comm (b := decide _ = _)]
+  simp
 
 theorem decide_eq_bool {p : Prop} [Decidable p] {b : Bool}
     : decide p = b ↔ (p ↔ b = true) := by cases b <;> simp
@@ -255,6 +297,11 @@ theorem mem_language_iff {r : Regex α} {term : ∀ w, r.Terminates w 0 0} {w}
     : w ∈ r.language term ↔ r.IsMatch w (term w) := by
   simp [language]; rfl
 
+--/-- The reverse direction, because rewriting is being annoying -/
+--theorem mem_language_iff' {r : Regex α} {term : ∀ w, r.Terminates w 0 0} {w}
+--    : r.IsMatch w (term w) ↔ w ∈ r.language term ↔ r.IsMatch w (term w) := by
+--  simp [language]; rfl
+
 theorem language_bot : ([/⊥/] : Regex α).language (fun _ ↦ terminates_bot) = 0 := by
   simp [language, isMatch_bot]; rfl
 
@@ -289,6 +336,19 @@ theorem language_filterEmpty {e : Bool} {r : Regex α}
   split <;> (expose_names; simp only [h, iff_true, Bool.false_eq_true, iff_false])
   · ext x; rw [Language.mem_inf, Set.setOf_and, Set.mem_inter_iff]; rfl
   · ext x; rw [Language.mem_sub, Set.setOf_and, Set.mem_inter_iff]; rfl
+
+/-- Not a simple language description, but this is the language of a star.
+Note that it is *not* the star of the individual language. -/
+theorem language_star {t : StarType} {r : Regex α}
+    (term : ∀ w, [/⟨r⟩*‹t›/].Terminates w 0 0)
+    : [/⟨r⟩*‹t›/].language term =
+      {w | ∃ (ls : List (ℕ × Captures)) (nemp : ls ≠ []),
+        ls.head nemp = (0, 0) ∧ (ls.getLast nemp).1 = w.length ∧
+        ∀ (i : _) (h : i + 1 < ls.length),
+          ∃ term' : r.Terminates w ls[i].1 ls[i].2,
+          ls[i + 1] ∈ r.matchPartial w ls[i].1 ls[i].2 term' ∧
+          (i + 2 = ls.length ∨ ls[i].1 < ls[i + 1].1)} := by
+  simp [language, isMatch_star']
 
 theorem language_start : ([/⊢/] : Regex α).language (fun _ ↦ terminates_start) = {[]} := by
   simp [language, isMatch_start]

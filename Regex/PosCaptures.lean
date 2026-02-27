@@ -363,7 +363,7 @@ first one ends -/
 omit deq in
 /-- If the end of an extract is out of bounds, the extract is bounded
 at the length of the list instead -/
-@[simp] theorem extract_right (w : List α) (s : ℕ) {t : ℕ} (h : w.length ≤ t)
+theorem extract_right (w : List α) (s : ℕ) {t : ℕ} (h : w.length ≤ t)
     : w.extract s t = w.extract s w.length := by
   simp only [extract_eq_drop_take, take_eq_take_iff, length_drop, min_self, inf_eq_right,
     tsub_le_iff_right]

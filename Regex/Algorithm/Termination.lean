@@ -1,7 +1,6 @@
 import Regex.Algorithm.Defs
 import Regex.Algorithm.StackDMO
 import Regex.Except
-import Regex.Util
 
 -- A general termination argument based on decreasing actions
 
@@ -509,7 +508,7 @@ theorem top_run_equiv' {st : MatchStack α} (term : st.Terminates)
 
 theorem top_run_terminates_iff {st : MatchStack α}
     {as bs : List (Action α)} (hst : st.entries = as ++ bs)
-    : st.Terminates ↔ (top : (mk as st.arg).Terminates) ∧
+    : st.Terminates ↔ ∃ (top : (mk as st.arg).Terminates),
       (mk bs ((mk as st.arg).run top)).Terminates := by
   constructor
   · intro term

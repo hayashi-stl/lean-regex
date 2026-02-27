@@ -6,7 +6,6 @@ import Mathlib.Computability.RegularExpressions
 import Mathlib.Tactic
 import Regex.Algorithm.Termination
 import Regex.List
-import Regex.Util
 
 namespace Regex
 
@@ -251,7 +250,7 @@ theorem Action.terminates_concatWait {q r : Regex α} {arg : PartialMatches}
 /-- `concat q r` terminates iff `q` terminates and `r` terminates for every
 end position and match provided by `q` -/
 theorem terminates_concat {q r : Regex α}
-    : [/⟨q⟩ ⟨r⟩/].Terminates w s cap ↔ (term : q.Terminates w s cap) ∧
+    : [/⟨q⟩ ⟨r⟩/].Terminates w s cap ↔ ∃ term : q.Terminates w s cap,
       ∀ mat ∈ q.matchPartial w s cap term, r.Terminates w mat.1 mat.2 := by
   constructor
   · intro term
@@ -464,7 +463,7 @@ theorem terminates_star' {t : StarType}
 /-- `star t r` terminates iff `r` terminates and `r` terminates for every
 advancing end position and match provided by `r` -/
 theorem terminates_star {t : StarType}
-    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ (term : r.Terminates w s cap) ∧
+    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ ∃ term : r.Terminates w s cap,
       ∀ mat ∈ r.matchPartial w s cap term,
         s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
   rw [Terminates, initMatchPartial]
@@ -476,14 +475,14 @@ theorem terminates_star {t : StarType}
       terminates_or] at ⊢
     rw! [terminates_filterEmpty, terminates_concat,
       terminates_filterEmpty]
-    simp [dand_iff_and_forall, terminates_empty, matchPartial_filterEmpty]
+    simp [terminates_empty, matchPartial_filterEmpty]
   | lazy =>
     simp only
     rw [← matchPartial_terminates_iff, terminates_or,
       terminates_or] at ⊢
     rw! [terminates_filterEmpty, terminates_concat,
       terminates_filterEmpty]
-    simp [dand_iff_and_forall, terminates_empty, matchPartial_filterEmpty]
+    simp [terminates_empty, matchPartial_filterEmpty]
 
 theorem matchPartial_star {t : StarType}
     (term : [/⟨r⟩*‹t›/].Terminates w s cap)
@@ -530,8 +529,7 @@ theorem list_terminates {l : List α}
   | cons a as ind =>
     rw [list, terminates_concat]
     simp only [matchPartial_unit, List.mem_ite_nil_right, List.mem_cons, List.not_mem_nil, or_false,
-      and_imp, forall_eq_apply_imp_iff, dand_iff_and_forall, terminates_unit, forall_const,
-      true_and]
+      and_imp, forall_eq_apply_imp_iff, terminates_unit, exists_const]
     exact fun _ ↦ ind
 
 /-- `backref` always terminates -/
