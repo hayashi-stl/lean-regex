@@ -49,9 +49,9 @@ inductive Regex (α : Type u) : Type u where
   | concat (q r : Regex α) : Regex α
   /-- Matches `q` or `r`. `q` takes priority.-/
   | or (q r : Regex α) : Regex α
-  /-- Matches a sequence iff `r` matches it and the sequence is empty or not,
-  depending on `emp` -/
-  | filterEmpty (emp : Bool) (r : Regex α) : Regex α
+  --/-- Matches a sequence iff `r` matches it and the sequence is empty or not,
+  --depending on `emp` -/
+  --| filterEmpty (emp : Bool) (r : Regex α) : Regex α
   --/-- Transform a list of matches based on `f` -/
   --| transform (f : {w : List α} → (s : Regex.Pos w)) (r : Regex α) : Regex α
   /-- Matches `r` 0 or more times. Priority depends on the star type. -/
@@ -77,7 +77,6 @@ def depth {α : Type*} (r : Regex α) : ℕ := match r with
   | unit _ => 0
   | concat q r => q.depth + r.depth + 1
   | or q r => q.depth + r.depth + 1
-  | filterEmpty _ r => r.depth + 1
   | star _ r => r.depth + 1
   | start => 0
   | end' => 0

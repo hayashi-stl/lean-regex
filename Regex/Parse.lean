@@ -19,13 +19,11 @@ scoped syntax:55 regex:56 " | " regex:55 : regex
 scoped syntax:max regex:max "*" : regex
 scoped syntax:max regex:max "*?" : regex
 scoped syntax:max regex:max "*‹" term:min "›" : regex
-scoped syntax:max regex:max " •ε" : regex
-scoped syntax:max regex:max " -ε" : regex
 scoped syntax:max regex:max " ‹" term:min "›ε" : regex
 scoped syntax:max "⊢" : regex
 scoped syntax:max "⊣" : regex
 scoped syntax:max "(" regex:min ")" : regex
-scoped syntax:max "(‹" term:min "› " regex:min ")" : regex
+scoped syntax:max "(" term':max " ← " regex:min ")" : regex
 --scoped syntax:max "\\(" term:21 " <|> " regex:min ")" : regex
 scoped syntax:max "\\⊥" term':max : regex
 scoped syntax:max "\\ε" term':max : regex
@@ -48,16 +46,13 @@ macro_rules
   | `([/ $s:str /]) => `(string $s)
   | `([/ $t:regex $u:regex /]) => `(concat [/$t/] [/$u/])
   | `([/ $t:regex | $u:regex /]) => `(or [/$t/] [/$u/])
-  | `([/ $t:regex -ε /]) => `(filterEmpty false [/$t/])
-  | `([/ $t:regex •ε /]) => `(filterEmpty true [/$t/])
-  | `([/ $t:regex ‹ $e:term ›ε /]) => `(filterEmpty $e [/$t/])
   | `([/ $t:regex * /]) => `(star .greedy [/$t/])
   | `([/ $t:regex *? /]) => `(star .lazy [/$t/])
   | `([/ $t:regex *‹ $u:term › /]) => `(star $u [/$t/])
   | `([/ ⊢ /]) => `(start)
   | `([/ ⊣ /]) => `(end')
   | `([/ ( $t:regex ) /]) => `([/$t/])
-  | `([/ (‹ $n:term › $t:regex) /]) => `(capture $n [/$t/])
+  | `([/ ( $n:term' ← $t:regex) /]) => `(capture [‹ $n ›] [/$t/])
   | `([/ \⊥ $n:term' /]) => `(backref [/⊥/] [‹ $n ›])
   | `([/ \ε $n:term' /]) => `(backref [//] [‹ $n ›])
   | `([/ \‹ $d:term › $n:term' /]) => `(backref $d [‹ $n ›])
@@ -117,12 +112,6 @@ def delabRegex : Delab := do
     `([/ $(← exprRegex q) $(← exprRegex r) /])
   | (``Regex.or, #[_, q, r]) =>
     `([/ $(← exprRegex q) | $(← exprRegex r) /])
-  | (``Regex.filterEmpty, #[_, Expr.const ``false _, r]) =>
-    `([/ $(← exprRegex r) -ε /])
-  | (``Regex.filterEmpty, #[_, Expr.const ``true _, r]) =>
-    `([/ $(← exprRegex r) •ε /])
-  | (``Regex.filterEmpty, #[_, e, r]) =>
-    `([/ $(← exprRegex r) ‹ $(← delab e) ›ε /])
   | (``Regex.star, #[_, t, r]) => match t.getAppFn' with
     | Expr.const ``Regex.StarType.greedy _ => `([/ $(← exprRegex r) * /])
     | Expr.const ``Regex.StarType.lazy _ => `([/ $(← exprRegex r) *? /])
@@ -130,7 +119,7 @@ def delabRegex : Delab := do
   | (``Regex.start, #[_]) => `([/⊢/])
   | (``Regex.end', #[_]) => `([/⊣/])
   | (``Regex.capture, #[_, n, r]) =>
-    `([/ (‹ $(← delab n) › $(← exprRegex r) ) /])
+    `([/ ($(← exprTerm' n) ← $(← exprRegex r) ) /])
   | (``Regex.backref, #[_, d, n]) => match d.getAppFn' with
     | Expr.const ``Regex.BackrefDefault.bot _ => `([/ \⊥ $(← exprTerm' n) /])
     | Expr.const ``Regex.BackrefDefault.empty _ => `([/ \ε $(← exprTerm' n) /])
@@ -143,7 +132,6 @@ def delabRegex : Delab := do
 @[delab app.Regex.string]      def delabString      := delabRegex
 @[delab app.Regex.concat]      def delabConcat      := delabRegex
 @[delab app.Regex.or]          def delabOr          := delabRegex
-@[delab app.Regex.filterEmpty] def delabFilterEmpty := delabRegex
 @[delab app.Regex.star]        def delabStar        := delabRegex
 @[delab app.Regex.start]       def delabStart       := delabRegex
 @[delab app.Regex.end']        def delabEnd'        := delabRegex
@@ -163,6 +151,6 @@ def regex.parenthesizer : CategoryParenthesizer := Parenthesizer.term.parenthesi
 
 --def blah : Regex ℕ := empty
 --def blah' : ℕ := 0
-#check concat start (concat (unit 0) end')
+--#check capture 0 (concat start (concat (unit 0) end'))
 
 end Regex

@@ -102,4 +102,6 @@ theorem CTerminates.allTerminates {r : Regex α} (hr : r.CTerminates)
   | capture n r _ rt => simp [terminates_capture, rt]
   | backref d n => termination
 
+#eval [/(‹0› (0 | ε)*)/].matchPartial [0] 0 0 (by termination)
+
 end Regex
