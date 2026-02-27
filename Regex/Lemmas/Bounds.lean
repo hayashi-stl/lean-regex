@@ -188,6 +188,16 @@ theorem terminates_star_greedy_iff_lazy
       have bound := matchPartial_outOfBounds_eq (le_of_lt sle) mem
       linarith)
 
+-- Some corollaries
+
+theorem terminates_star_iff_greedy {t : StarType}
+    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ [/⟨r⟩*/].Terminates w s cap := by
+  cases t <;> simp [terminates_star_greedy_iff_lazy]
+
+theorem terminates_star_iff_lazy {t : StarType}
+    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ [/⟨r⟩*?/].Terminates w s cap := by
+  cases t <;> simp [terminates_star_greedy_iff_lazy]
+
 /-- The set of partial matches in the greedy and lazy versions of the same star
 are the same. -/
 theorem mem_matchPartial_star_greedy_iff_lazy {term : [/⟨r⟩*/].Terminates w s cap} {mat}
@@ -223,5 +233,19 @@ theorem mem_matchPartial_star_lazy_iff_greedy {term : [/⟨r⟩*?/].Terminates w
     : mat ∈ [/⟨r⟩*?/].matchPartial w s cap term ↔
       mat ∈ [/⟨r⟩*/].matchPartial w s cap (terminates_star_greedy_iff_lazy.mpr term) := by
   rw [mem_matchPartial_star_greedy_iff_lazy]
+
+-- Some corollaries
+
+theorem mem_matchPartial_star_iff_greedy {t : StarType}
+    {term : [/⟨r⟩*‹t›/].Terminates w s cap} {mat}
+    : mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term ↔
+      mat ∈ [/⟨r⟩*/].matchPartial w s cap (terminates_star_iff_greedy.mp term) := by
+  cases t <;> simp [mem_matchPartial_star_greedy_iff_lazy]
+
+theorem mem_matchPartial_star_iff_lazy {t : StarType}
+    {term : [/⟨r⟩*‹t›/].Terminates w s cap} {mat}
+    : mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term ↔
+      mat ∈ [/⟨r⟩*?/].matchPartial w s cap (terminates_star_iff_lazy.mp term) := by
+  cases t <;> simp [mem_matchPartial_star_greedy_iff_lazy]
 
 end Regex
