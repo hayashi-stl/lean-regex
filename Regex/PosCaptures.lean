@@ -6,11 +6,14 @@ theorem min_or {α : Type*} [LinearOrder α] (a b : α)
 --protected theorem Nat.sub_lt_sub_iff_left {a b c : Nat}
 --  (h : c ≤ a) : a - c < b - c ↔ a < b := by omega
 
-variable {α : Type u} [deq : DecidableEq α] {w : List α}
+variable {α : Type*} [deq : DecidableEq α] {w : List α}
 
 namespace Regex
 
--- No more Icc. Too much dependent type hell.
+-- ≍ ▸ ▸ ▸ Reentering dependent type hell! ▸ ▸ ▸ ≍
+@[reducible] def Pos (w : List α) := Fin (w.length + 1)
+
+namespace Pos
 
 --/-- Probably easier to work with than `Fin` and subtyping at the same time.
 --`Icc a b` is the subtype of natural numbers `n` where `a ≤ n ≤ b`. -/
@@ -68,15 +71,15 @@ namespace Regex
 ----@[simp] theorem root_.List.min?_append (as bs : List α) (d : α)
 ----    : (as ++ bs).min? = as.m
 --
---omit deq in
---/-- The length of a list extraction using valid positions `s` and `t`
---is just `t - s`, potentially with underflow -/
---@[simp] theorem _root_.List.length_extract_icc' (w : List α) (s : Pos w) (t : Pos w)
---    : (w.extract s.val t.val).length = t.val - s.val := by
---  simp only [List.extract_eq_drop_take, List.length_take, List.length_drop,
---    inf_eq_left, tsub_le_iff_right]
---  rw [Nat.sub_add_cancel s.prop.2]
---  exact t.prop.2
+omit deq in
+/-- The length of a list extraction using valid positions `s` and `t`
+is just `t - s`, potentially with underflow -/
+@[simp] theorem _root_.List.length_extract_pos {w : List α} (s : Pos w) (t : Pos w)
+    : (w.extract s.val t.val).length = t.val - s.val := by
+  simp only [List.extract_eq_drop_take, List.length_take, List.length_drop,
+    inf_eq_left, tsub_le_iff_right]
+  rw [Nat.sub_add_cancel s.is_le]
+  exact t.is_le
 --
 --omit deq in
 --/-- The length of a list extraction using valid positions `s` and `t`
@@ -265,12 +268,12 @@ namespace Regex
 --  rw [← Subtype.val_inj, zero_val, end'_val, (eq_comm : 0 = w.length ↔ _)]
 --  exact Iff.symm List.length_eq_zero_iff
 --
---def strongRecEnd {motive : Icc a b → Sort u}
---    (ind : ∀ s, (∀ s', s < s' → motive s') → motive s) (s : Icc a b)
---    : motive s :=
---  ind s fun t _lt ↦ strongRecEnd ind t
---termination_by s.distToEnd
---decreasing_by exact distToEnd_lt.mp _lt
+def strongRecEnd {motive : Pos w → Sort*}
+    (ind : ∀ s, (∀ s', s < s' → motive s') → motive s) (s : Pos w)
+    : motive s :=
+  ind s fun t _lt ↦ strongRecEnd ind t
+termination_by s.rev
+decreasing_by rwa [Fin.val_fin_lt, Fin.rev_lt_rev]
 --
 ----def succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c) : IccFrom s :=
 ----  ⟨s.val + 1, ⟨Nat.le_add_right s.val 1, by
@@ -279,17 +282,17 @@ namespace Regex
 ----    exact Nat.add_one_le_of_lt hs
 ----  ⟩⟩
 --
---/-- Use the fact that an item exists at `w[s]` to provably add 1 to `s` -/
---def succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c) : Pos w :=
---  ⟨s.val + 1, ⟨Nat.zero_le _, by
---    rw [List.getElem?_eq_some_iff] at hs
---    rcases hs with ⟨hs, _⟩
---    exact Nat.add_one_le_of_lt hs
---  ⟩⟩
---
---omit deq in
---@[simp] theorem succOfIndex_val {s : Pos w} {c : α} (hs : w[s.val]? = c)
---    : (succOfIndex hs).val = s.val + 1 := by rfl
+/-- Use the fact that an item exists at `w[s]` to provably add 1 to `s` -/
+def succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c) : Pos w :=
+  ⟨s.val + 1, by
+    rw [List.getElem?_eq_some_iff] at hs
+    rcases hs with ⟨hs, _⟩
+    exact Nat.add_lt_add_right hs _
+  ⟩
+
+omit deq in
+@[simp] theorem val_succOfIndex {s : Pos w} {c : α} (hs : w[s.val]? = c)
+    : (succOfIndex hs).val = s.val + 1 := by rfl
 --
 ----def addOfIndex {s : Pos w} {t : ℕ} {cs : List α}
 ----    (ex : w.extract s.val (s.val + t) = cs) (hcs : cs.length = t) : IccFrom s :=
@@ -300,21 +303,22 @@ namespace Regex
 ----    exact Nat.add_le_of_le_sub' s.is_le tle
 ----  ⟩⟩
 --
---/-- Use the fact that the subsequence at position `s` with length `t`
---actually has length `t` to provably add `t` to `s` -/
---def addOfIndex {s : Pos w} {t : ℕ} {cs : List α}
---    (ex : w.extract s.val (s.val + t) = cs) (hcs : cs.length = t) : Pos w :=
---  ⟨s.val + t, ⟨Nat.zero_le _, by
---    rw [← ex, List.extract_eq_drop_take, Nat.add_sub_cancel_left] at hcs
---    have tle := hcs ▸ List.length_take_le' t (List.drop s.val w)
---    rw [List.length_drop] at tle
---    exact Nat.add_le_of_le_sub' s.is_le tle
---  ⟩⟩
---
---omit deq in
---@[simp] theorem addOfIndex_val {s : Pos w} {t : ℕ} {cs : List α}
---    {ex : w.extract s.val (s.val + t) = cs} {hcs : cs.length = t}
---    : (addOfIndex ex hcs).val = s.val + t := by rfl
+/-- Use the fact that the subsequence at position `s` with length `t`
+actually has length `t` to provably add `t` to `s` -/
+def addOfIndex {s : Pos w} {t : ℕ} {cs : List α}
+    (ex : w.extract s.val (s.val + t) = cs) (hcs : cs.length = t) : Pos w :=
+  ⟨s.val + t, by
+    rw [← ex, List.extract_eq_drop_take, Nat.add_sub_cancel_left] at hcs
+    have tle := hcs ▸ List.length_take_le' t (List.drop s.val w)
+    rw [List.length_drop] at tle
+    rw [← Nat.le_iff_lt_add_one]
+    exact Nat.add_le_of_le_sub' s.is_le tle
+  ⟩
+
+omit deq in
+@[simp] theorem val_addOfIndex {s : Pos w} {t : ℕ} {cs : List α}
+    {ex : w.extract s.val (s.val + t) = cs} {hcs : cs.length = t}
+    : (addOfIndex ex hcs).val = s.val + t := by rfl
 --
 --end Icc
 --
@@ -322,6 +326,7 @@ namespace Regex
 --
 --end Icc
 --
+end Pos
 
 end Regex
 namespace Nat
@@ -598,28 +603,28 @@ namespace Regex
 /-- A *capture* is a stack of substring positions.
 Most programming languages treat this as an `option`,
 having only 0 or 1 items on it, but .NET is different. -/
-def Capture := List (ℕ × ℕ) deriving DecidableEq, Repr
+def Capture (w : List α) := List (Pos w × Pos w) deriving DecidableEq, Repr
 
-instance Capture.instZero : Zero Capture where
+instance Capture.instZero : Zero (Capture w) where
   zero := []
 
 /-- A map from "names" (actually natural numbers) to captures -/
-def Captures := ℕ →₀ Capture deriving Zero, DFunLike
+def Captures (w : List α) := ℕ →₀ Capture w deriving DecidableEq, Zero, DFunLike
 
 namespace Captures
 
 omit deq in
-@[simp] theorem zero_get {n : ℕ} : (0 : Captures) n = [] := by rfl
+@[simp] theorem zero_get {n : ℕ} : (0 : Captures w) n = [] := by rfl
 
 /-- Turns this into a list of (index, capture) pairs -/
-def toList (cs : Captures) : List (ℕ × Capture) :=
+def toList (cs : Captures w) : List (ℕ × Capture w) :=
   (fun n => (n, cs n)) <$> cs.support.sort
 
-instance instRepr : Repr Captures where
+instance instRepr : Repr (Captures w) where
   reprPrec cs := cs.toList.repr
 
 /-- Because `Finsupp.update` is noncomputable even in cases it doesn't need to be -/
-def update (cs : Captures) (n : ℕ) (c : Capture) : Captures :=
+def update (cs : Captures w) (n : ℕ) (c : Capture w) : Captures w :=
   Finsupp.mk
     (support := if c = 0 then cs.support \ {n} else cs.support ∪ {n})
     (toFun := Function.update cs.toFun n c)
@@ -645,7 +650,7 @@ end Captures
 --  apply Nat.sub_le_sub_right s'.is_le
 
 /-- A list of partial matches ((pos × captures) pairs) -/
-@[reducible] def PartialMatches := List (ℕ × Captures)
+@[reducible] def PartialMatches (w : List α) := List (Pos w × Captures w)
   deriving Repr
 
 end Regex

@@ -4,7 +4,12 @@ set_option linter.style.whitespace false
 namespace Regex
 
 declare_syntax_cat term'
-scoped syntax:max term:max : term'
+scoped syntax:max str : term'
+scoped syntax:max char : term'
+scoped syntax:max num : term'
+scoped syntax:max scientific : term'
+scoped syntax:max ident : term'
+scoped syntax:max name : term'
 -- using a different currency symbol here for antiquoting regexes
 scoped syntax:max "`‹" term:min "›" : term'
 
@@ -30,12 +35,20 @@ scoped syntax:max "\\ε" term':max : regex
 scoped syntax:max "\\‹" term:min "›" term':max : regex
 
 scoped syntax:max "[/" "/]" : term
-scoped syntax:max "[/" regex "/]" : term
+scoped syntax:max (name := regex) "[/" regex "/]" : term
 scoped syntax:max "[‹" term' "›]" : term
 
 macro_rules
-  | `([‹ $t:term ›]) => `($t)
+  | `([‹ $t:str ›]) => `($t)
+  | `([‹ $t:char ›]) => `($t)
+  | `([‹ $t:num ›]) => `($t)
+  | `([‹ $t:scientific ›]) => `($t)
+  | `([‹ $t:ident ›]) => `($t)
+  | `([‹ $t:name ›]) => `($t)
   | `([‹ `‹ $t:term › ›]) => `($t)
+  | `([//]) => `(empty)
+
+open Lean PrettyPrinter Delaborator SubExpr
 
 macro_rules
   | `([/ ⊥ /]) => `(bot)
@@ -52,12 +65,10 @@ macro_rules
   | `([/ ⊢ /]) => `(start)
   | `([/ ⊣ /]) => `(end')
   | `([/ ( $t:regex ) /]) => `([/$t/])
-  | `([/ ( $n:term' ← $t:regex) /]) => `(capture [‹ $n ›] [/$t/])
+  | `([/ ( $n:term' ← $t:regex ) /]) => `(capture [‹ $n ›] [/$t/])
   | `([/ \⊥ $n:term' /]) => `(backref [/⊥/] [‹ $n ›])
   | `([/ \ε $n:term' /]) => `(backref [//] [‹ $n ›])
   | `([/ \‹ $d:term › $n:term' /]) => `(backref $d [‹ $n ›])
-
-open Lean PrettyPrinter Delaborator SubExpr
 
 /-- Turns a ```TSyntax `term``` into a ```TSyntax `regex``` by
 extracting a wrapped regex -/
@@ -149,8 +160,11 @@ def regex.parenthesizer : CategoryParenthesizer := Parenthesizer.term.parenthesi
 --@[app_unexpander bot]   def unexpBot   : Unexpander := unexpRegex'
 --@[app_unexpander empty] def unexpEmpty : Unexpander := unexpRegex'
 
---def blah : Regex ℕ := empty
+--def blah.bleh : Regex ℕ := empty
 --def blah' : ℕ := 0
---#check capture 0 (concat start (concat (unit 0) end'))
+--#check [/`‹0›/]
+--#check [/0/]
+--#check [/(`‹0›)/]
+--#check [/(0)/]
 
 end Regex
