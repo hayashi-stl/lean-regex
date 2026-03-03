@@ -77,13 +77,13 @@ def Regular (r : Regex α) (term : ∀ w, r.Terminates w 0 0)
   := ∃ r' : RegularExpression α, r.language term = r'.matches'
 
 /-- The classic regular expression operators -/
-inductive CRegular : Regex α → Prop where
+inductive CRegular : Regex α → Type u where
   | bot : CRegular bot
   | empty : CRegular empty
   | unit c : CRegular (unit c)
-  | concat q r : CRegular q → CRegular r → CRegular (concat q r)
-  | or q r : CRegular q → CRegular r → CRegular (or q r)
-  | star t r : CRegular r → CRegular (star t r)
+  | concat {q} {r} : CRegular q → CRegular r → CRegular (concat q r)
+  | or {q} {r} : CRegular q → CRegular r → CRegular (or q r)
+  | star t {r} : CRegular r → CRegular (star t r)
 
 /-- A regex where `partialMatch` does not care about outside context
 like captures.
@@ -377,25 +377,23 @@ theorem MatchPartialFree.language_star {t : StarType} {r : Regex α}
 /-! Now to prove that the classic regular operators are actually regular -/
 
 /-- A class of regexes that can be proven to be matchPartialFree -/
-inductive CMatchPartialFree : Regex α → Prop where
+inductive CMatchPartialFree : Regex α → Type u where
   | bot : CMatchPartialFree bot
   | empty : CMatchPartialFree empty
   | unit c : CMatchPartialFree (unit c)
-  | concat q r : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (concat q r)
-  | or q r : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (or q r)
-  | star t r : CMatchPartialFree r → CMatchPartialFree (star t r)
-  | capture n r : CMatchPartialFree r → CMatchPartialFree (capture n r)
+  | concat {q} {r} : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (concat q r)
+  | or {q} {r} : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (or q r)
+  | star t {r} : CMatchPartialFree r → CMatchPartialFree (star t r)
+  | capture n {r} : CMatchPartialFree r → CMatchPartialFree (capture n r)
 
-omit deq in
-theorem CRegular.cMatchPartialFree {r : Regex α} (hr : r.CRegular)
-    : r.CMatchPartialFree := by
-  induction hr with
-  | bot => exact .bot
-  | empty => exact .empty
-  | unit c => exact .unit c
-  | concat _ _ _ _ qind rind => exact .concat _ _ qind rind
-  | or _ _ _ _ qind rind => exact .or _ _ qind rind
-  | star t _ _ rind => exact .star t _ rind
+def CRegular.cMatchPartialFree {r : Regex α} (hr : r.CRegular)
+    : r.CMatchPartialFree := match hr with
+  | bot => .bot
+  | empty => .empty
+  | unit c => .unit c
+  | concat qind rind => .concat qind.cMatchPartialFree rind.cMatchPartialFree
+  | or qind rind => .or qind.cMatchPartialFree rind.cMatchPartialFree
+  | star t rind => .star t rind.cMatchPartialFree
 
 /-- The classic regular operators are match-partial-free. -/
 theorem CMatchPartialFree.matchPartialFree {r : Regex α} (hr : r.CMatchPartialFree)
@@ -404,22 +402,20 @@ theorem CMatchPartialFree.matchPartialFree {r : Regex α} (hr : r.CMatchPartialF
   | bot => exact matchPartialFree_bot
   | empty => exact matchPartialFree_empty
   | unit _ => exact matchPartialFree_unit
-  | concat _ _ _ _ qind rind => exact matchPartialFree_concat qind rind
-  | or _ _ _ _ qind rind => exact matchPartialFree_or qind rind
-  | star _ _ _ rind => exact matchPartialFree_star rind
-  | capture n _ _ rind => exact matchPartialFree_capture rind
+  | concat _ _ qind rind => exact matchPartialFree_concat qind rind
+  | or _ _ qind rind => exact matchPartialFree_or qind rind
+  | star _ _ rind => exact matchPartialFree_star rind
+  | capture n _ rind => exact matchPartialFree_capture rind
 
-omit deq in
-theorem CMatchPartialFree.cTerminates {r : Regex α} (hr : r.CMatchPartialFree)
-    : r.CTerminates := by
-  induction hr with
-  | bot => exact CTerminates.bot
-  | empty => exact CTerminates.empty
-  | unit _ => exact CTerminates.unit _
-  | concat _ _ _ _ qt rt => exact CTerminates.concat _ _ qt rt
-  | or _ _ _ _ qt rt => exact CTerminates.or _ _ qt rt
-  | star _ _ _ rt => exact CTerminates.star _ _ rt
-  | capture n _ _ rt => exact CTerminates.capture n _ rt
+def CMatchPartialFree.cTerminates {r : Regex α} (hr : r.CMatchPartialFree)
+    : r.CTerminates := match hr with
+  | bot => CTerminates.bot
+  | empty => CTerminates.empty
+  | unit _ => CTerminates.unit _
+  | concat qt rt => CTerminates.concat qt.cTerminates rt.cTerminates
+  | or qt rt => CTerminates.or qt.cTerminates rt.cTerminates
+  | star t rt => CTerminates.star t rt.cTerminates
+  | capture n rt => CTerminates.capture n rt.cTerminates
 
 theorem CMatchPartialFree.allTerminates {r : Regex α} (hr : r.CMatchPartialFree) :
   r.AllTerminates := hr.cTerminates.allTerminates
@@ -430,40 +426,38 @@ theorem CMatchPartialFree.regular {r : Regex α} {hr : r.CMatchPartialFree}
   | bot => use 0; simp [language_bot]
   | empty => use 1; simp [language_empty]; rfl
   | unit c => use .char c; simp [language_unit]
-  | concat q r qcr rcr qr rr =>
+  | concat qcr rcr qr rr =>
     have ⟨qreg, qeq⟩ := qr
     have ⟨rreg, req⟩ := rr
     use qreg * rreg
     rw [qcr.matchPartialFree.language_concat rcr.matchPartialFree,
       RegularExpression.matches'_mul, qeq, req]
-  | or q r _ _ qr rr =>
+  | or _ _ qr rr =>
     have ⟨qreg, qeq⟩ := qr
     have ⟨rreg, req⟩ := rr
     use qreg + rreg
     rw [language_or, RegularExpression.matches'_add, qeq, req]
-  | star t r rcr rr =>
+  | star t rcr rr =>
     have ⟨rreg, req⟩ := rr
     use .star rreg
     rw [rcr.matchPartialFree.language_star, RegularExpression.matches'_star, req]
-  | capture n r rcr rr => have ⟨rreg, req⟩ := rr; use rreg; rw [language_capture, req]
+  | capture n rcr rr => have ⟨rreg, req⟩ := rr; use rreg; rw [language_capture, req]
 
 /-- A minimal class of regular expressions -/
-inductive CMinimalRegular : Regex α → Prop where
+inductive CMinimalRegular : Regex α → Type u where
   | bot : CMinimalRegular bot
   | unit c : CMinimalRegular (unit c)
-  | concat q r : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (concat q r)
-  | or q r : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (or q r)
-  | star t r : CMinimalRegular r → CMinimalRegular (star t r)
+  | concat {q} {r} : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (concat q r)
+  | or {q} {r} : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (or q r)
+  | star t {r} : CMinimalRegular r → CMinimalRegular (star t r)
 
-omit deq in
-theorem CMinimalRegular.cRegular {r : Regex α} (hr : r.CMinimalRegular)
-    : r.CMatchPartialFree := by
-  induction hr with
-  | bot => exact .bot
-  | unit c => exact .unit c
-  | concat _ _ _ _ qind rind => exact .concat _ _ qind rind
-  | or _ _ _ _ qind rind => exact .or _ _ qind rind
-  | star t _ _ rind => exact .star t _ rind
+def CMinimalRegular.cRegular {r : Regex α} (hr : r.CMinimalRegular)
+    : r.CMatchPartialFree := match hr with
+  | bot => .bot
+  | unit c => .unit c
+  | concat qind rind => .concat qind.cRegular rind.cRegular
+  | or qind rind => .or qind.cRegular rind.cRegular
+  | star t rind => .star t rind.cRegular
 
 theorem CMinimalRegular.allTerminates {r : Regex α} (hr : r.CMinimalRegular)
     : r.AllTerminates := hr.cRegular.allTerminates
@@ -482,7 +476,7 @@ theorem regular_iff_cMinimalRegular (l : Language α)
     induction r generalizing l with
     | zero => refine ⟨_, CMinimalRegular.bot, ?_⟩; simp [← lan, language_bot]
     | epsilon =>
-      refine ⟨_, CMinimalRegular.star .greedy _ CMinimalRegular.bot, ?_⟩
+      refine ⟨_, CMinimalRegular.star .greedy CMinimalRegular.bot, ?_⟩
       rw [MatchPartialFree.language_star matchPartialFree_bot]
       simp [← lan, language_bot]
     | char c =>
@@ -491,17 +485,17 @@ theorem regular_iff_cMinimalRegular (l : Language α)
     | comp q r qind rind =>
       have ⟨q', q'mr, q'l⟩ := qind q.matches' rfl
       have ⟨r', r'mr, r'l⟩ := rind r.matches' rfl
-      refine ⟨_, CMinimalRegular.concat _ _ q'mr r'mr, ?_⟩
+      refine ⟨_, CMinimalRegular.concat q'mr r'mr, ?_⟩
       rw [MatchPartialFree.language_concat q'mr.matchPartialFree r'mr.matchPartialFree]
       simp [← lan, q'l, r'l]
     | plus q r qind rind =>
       have ⟨q', q'mr, q'l⟩ := qind q.matches' rfl
       have ⟨r', r'mr, r'l⟩ := rind r.matches' rfl
-      refine ⟨_, CMinimalRegular.or _ _ q'mr r'mr, ?_⟩
+      refine ⟨_, CMinimalRegular.or q'mr r'mr, ?_⟩
       simp [language_or, ← lan, q'l, r'l]
     | star r rind =>
       have ⟨r', r'mr, r'l⟩ := rind r.matches' rfl
-      refine ⟨_, CMinimalRegular.star .greedy _ r'mr, ?_⟩
+      refine ⟨_, CMinimalRegular.star .greedy r'mr, ?_⟩
       rw [MatchPartialFree.language_star r'mr.matchPartialFree]
       simp [← lan, r'l]
   · intro ⟨r, reg, lan⟩

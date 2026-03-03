@@ -15,6 +15,12 @@ namespace Regex
 
 namespace Pos
 
+def reverse (s : Pos w) : Pos w.reverse := s.rev.cast (by simp)
+
+omit deq in
+@[simp] theorem val_reverse (s : Pos w) : s.reverse.val = w.length - s := by
+  simp [reverse]
+
 --/-- Probably easier to work with than `Fin` and subtyping at the same time.
 --`Icc a b` is the subtype of natural numbers `n` where `a ≤ n ≤ b`. -/
 --def Icc (a b : ℕ) := {x : ℕ // a ≤ x ∧ x ≤ b}
@@ -605,8 +611,15 @@ Most programming languages treat this as an `option`,
 having only 0 or 1 items on it, but .NET is different. -/
 def Capture (w : List α) := List (Pos w × Pos w) deriving DecidableEq, Repr
 
+def Capture.reverse (c : Capture w) : Capture w.reverse :=
+  c.map (fun x ↦ (x.1.reverse, x.2.reverse))
+
 instance Capture.instZero : Zero (Capture w) where
   zero := []
+
+omit deq
+@[simp] theorem Capture.reverse_zero : (reverse 0 : Capture w.reverse) = 0 := by
+  simp [reverse]; rfl
 
 /-- A map from "names" (actually natural numbers) to captures -/
 def Captures (w : List α) := ℕ →₀ Capture w deriving DecidableEq, Zero, DFunLike
@@ -626,9 +639,9 @@ instance instRepr : Repr (Captures w) where
 /-- Because `Finsupp.update` is noncomputable even in cases it doesn't need to be -/
 def update (cs : Captures w) (n : ℕ) (c : Capture w) : Captures w :=
   Finsupp.mk
-    (support := if c = 0 then cs.support \ {n} else cs.support ∪ {n})
-    (toFun := Function.update cs.toFun n c)
-    (mem_support_toFun := by
+    (if c = 0 then cs.support \ {n} else cs.support ∪ {n})
+    (Function.update cs.toFun n c)
+    (by
       intro n'
       rw [Function.update]
       split_ifs <;> simp only [Finset.mem_sdiff, Finset.union_singleton, Finset.mem_singleton,
@@ -638,6 +651,27 @@ def update (cs : Captures w) (n : ℕ) (c : Capture w) : Captures w :=
       · grind
       · rw [show cs.toFun n' = cs n' by congr 1]; grind
       )
+
+def mapRange {wf : List α → List α} (f : Capture w → Capture (wf w)) (hf : f 0 = 0)
+    (cs : Captures w)
+    : Captures (wf w) :=
+  Finsupp.mk
+    (cs.support.filter fun c ↦ f (cs c) ≠ 0)
+    (f ∘ cs.toFun)
+    (by
+      simp only [ne_eq, Finset.mem_filter, Finsupp.mem_support_iff, Function.comp_apply]
+      intro n
+      constructor
+      · rintro ⟨csn, fcsn⟩; exact fcsn
+      · intro fcsn
+        contrapose! fcsn
+        by_cases h : cs n = 0
+        · simp [show cs.toFun n = cs n by rfl, h, hf]
+        · exact fcsn h
+      )
+
+def reverse (c : Captures w) : Captures w.reverse :=
+  c.mapRange (fun c : Capture w ↦ c.reverse) (by simp)
 
 end Captures
 
