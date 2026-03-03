@@ -1,20 +1,7 @@
 import Mathlib.Tactic
 import Regex.PosCaptures
 
-inductive Regex.StarType where
-  /-- Higher numbers of matches have higher priority -/
-  | greedy : StarType
-  /-- Lower numbers of matches have higher priority -/
-  | lazy : StarType
-  deriving Repr
-
 namespace Regex.StarType
-
-theorem greedy_iff_not_lazy (t : StarType) : t = greedy ↔ t ≠ lazy := by
-  cases t <;> simp
-
-theorem lazy_iff_not_greedy (t : StarType) : t = lazy ↔ t ≠ greedy := by
-  cases t <;> simp
 
 end Regex.StarType
 
@@ -54,8 +41,9 @@ inductive Regex (α : Type u) : Type u where
   --| filterEmpty (emp : Bool) (r : Regex α) : Regex α
   --/-- Transform a list of matches based on `f` -/
   --| transform (f : {w : List α} → (s : Regex.Pos w)) (r : Regex α) : Regex α
-  /-- Matches `r` 0 or more times. Priority depends on the star type. -/
-  | star (t : Regex.StarType) (r : Regex α) : Regex α
+  /-- Matches `r` 0 or more times greedily.
+  The lazy star can be simulated with the greedy star-/
+  | star (r : Regex α) : Regex α
   /-- Matches the start of the sequence -/
   | start : Regex α
   /-- Matches the end of the sequence -/
@@ -77,7 +65,7 @@ def depth {α : Type*} (r : Regex α) : ℕ := match r with
   | unit _ => 0
   | concat q r => q.depth + r.depth + 1
   | or q r => q.depth + r.depth + 1
-  | star _ r => r.depth + 1
+  | star r => r.depth + 1
   | start => 0
   | end' => 0
   | capture _ r => r.depth + 1

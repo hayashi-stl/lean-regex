@@ -75,11 +75,11 @@ theorem isMatch_or {q r : Regex α} (term : [/⟨q⟩ | ⟨r⟩/].Terminates w 0
 
 -- Note the intentional use of a greedy star in the recursion.
 -- That is an arbitrary choice made for the purpose of uniting the star types.
-theorem isMatch_star {t : StarType} {r : Regex α} (term : [/⟨r⟩*‹t›/].Terminates w 0 0)
-    : [/⟨r⟩*‹t›/].IsMatch w term ↔
+theorem isMatch_star {r : Regex α} (term : [/⟨r⟩*/].Terminates w 0 0)
+    : [/⟨r⟩*/].IsMatch w term ↔
       w = [] ∨
       ∃ (mat : _) (mem : mat ∈ r.matchPartial w 0 0 (terminates_star.mp term).1)
-        (lt : 0 < mat.1), ∃ mat' ∈ [/⟨r⟩*‹t›/].matchPartial w mat.1 mat.2
+        (lt : 0 < mat.1), ∃ mat' ∈ [/⟨r⟩*/].matchPartial w mat.1 mat.2
           ((terminates_star.mp term).2 _ mem lt),
         mat'.1 = w.length := by
   simp only [IsMatch, match'_def, ne_eq, List.filter_eq_nil_iff, decide_eq_true_eq,
@@ -168,12 +168,12 @@ theorem language_or {q r : Regex α} (term : ∀ w, [/⟨q⟩ | ⟨r⟩/].Termin
 
 /-- Not a simple language description, but this is the language of a star.
 Note that it is *not* the star of the individual language. -/
-theorem language_star {t : StarType} {r : Regex α}
-    (term : ∀ w, [/⟨r⟩*‹t›/].Terminates w 0 0)
-    : [/⟨r⟩*‹t›/].language term =
+theorem language_star {r : Regex α}
+    (term : ∀ w, [/⟨r⟩*/].Terminates w 0 0)
+    : [/⟨r⟩*/].language term =
       {[]} ∪ {w | ∃ (mat : _)
         (mem : mat ∈ r.matchPartial w 0 0 (terminates_star.mp (term w)).1)
-        (lt : 0 < mat.1), ∃ mat' ∈ [/⟨r⟩*‹t›/].matchPartial w mat.1 mat.2
+        (lt : 0 < mat.1), ∃ mat' ∈ [/⟨r⟩*/].matchPartial w mat.1 mat.2
           ((terminates_star.mp (term w)).2 _ mem lt),
         mat'.1 = w.length} := by
   simp [language, isMatch_star]

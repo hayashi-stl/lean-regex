@@ -16,10 +16,10 @@ inductive Action (w : List α) : Type u where
   /-- Concatenate the two lists of matches -/
   | or (fst : PartialMatches w) : Action w
   /-- Wait for matches from the first match attempt of a star -/
-  | starWait (t : StarType) (r : Regex α) (s : Pos w) (cap : Captures w): Action w
+  | starWait (r : Regex α) (s : Pos w) (cap : Captures w): Action w
   /-- Process the star with another match. This looks like `concat`,
   but has special behavior that it's not worth complicating `concat` for. -/
-  | star (t : StarType) (r : Regex α) (s : Pos w)
+  | star (r : Regex α) (s : Pos w)
     (cap : Captures w) (old new : PartialMatches w) : Action w
   /-- Capture a match -/
   | capture (n : ℕ) (s : Pos w) : Action w
@@ -40,7 +40,7 @@ def Action.process (ac : Action w) (arg : PartialMatches w)
     | .unit c => ⟨[], if h : w[s.val]? = c then [(s.succOfIndex h, cap)] else []⟩
     | .concat q r => ⟨[regex q s cap, concatWait r], []⟩
     | .or q r => ⟨[regex q s cap, orWait r s cap], []⟩
-    | .star t r => ⟨[regex r s cap, starWait t r s cap], []⟩
+    | .star r => ⟨[regex r s cap, starWait r s cap], []⟩
     | .start => ⟨[], if s = 0 then [(s, cap)] else []⟩
     | .end' => ⟨[], if s = w.length then [(s, cap)] else []⟩
     | .capture n r => ⟨[regex r s cap, capture n s], []⟩
@@ -54,14 +54,12 @@ def Action.process (ac : Action w) (arg : PartialMatches w)
     | (s', cap) :: old => ⟨[regex r s' cap, concat r old (new ++ arg)], []⟩
   | .orWait r s cap => ⟨[regex r s cap, or arg], []⟩
   | .or fst => ⟨[], fst ++ arg⟩
-  | .starWait t r s cap => ⟨[star t r s cap arg []], []⟩
-  | .star t r s cap old new => match old with
-    | [] => ⟨[], match t with
-        | .greedy => new ++ arg ++ [(s, cap)]
-        | .lazy => [(s, cap)] ++ new ++ arg⟩
+  | .starWait r s cap => ⟨[star r s cap arg []], []⟩
+  | .star r s cap old new => match old with
+    | [] => ⟨[], new ++ arg ++ [(s, cap)]⟩
     | (s', cap') :: old => ⟨if s < s'
-        then [regex [/⟨r⟩*‹t›/] s' cap', star t r s cap old (new ++ arg)]
-        else [star t r s cap old (new ++ arg ++ [(s', cap')])], []⟩
+        then [regex [/⟨r⟩*/] s' cap', star r s cap old (new ++ arg)]
+        else [star r s cap old (new ++ arg ++ [(s', cap')])], []⟩
   | .capture n s => ⟨[], arg.map fun (s', cap) ↦
       (s', cap.update n [(s, s')])⟩
 

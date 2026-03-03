@@ -83,7 +83,7 @@ inductive CRegular : Regex α → Type u where
   | unit c : CRegular (unit c)
   | concat {q} {r} : CRegular q → CRegular r → CRegular (concat q r)
   | or {q} {r} : CRegular q → CRegular r → CRegular (or q r)
-  | star t {r} : CRegular r → CRegular (star t r)
+  | star {r} : CRegular r → CRegular (star r)
 
 /-- A regex where `partialMatch` does not care about outside context
 like captures.
@@ -211,16 +211,16 @@ theorem matchPartialFree_or {q r : Regex α} (qf : q.MatchPartialFree)
   · have ⟨cap₁', mem'⟩ := rf.cast.2 _ _ _ _ mem wa wb _ rfl cap₁
     exact ⟨cap₁', Or.inr mem'⟩
 
-theorem matchPartialFree_star {t : StarType} {r : Regex α} (rf : r.MatchPartialFree)
-    : [/⟨r⟩*‹t›/].MatchPartialFree := by
+theorem matchPartialFree_star {r : Regex α} (rf : r.MatchPartialFree)
+    : [/⟨r⟩*/].MatchPartialFree := by
   rw [matchPartialFree_iff_matchPartialFree']
   intro w s
   induction s using Pos.strongRecEnd with | ind s ind =>
     refine ⟨allTerminates_star rf.1, ?_⟩
-    conv in _ ∈ _ => rw [(matchPartialEquiv_star_type .greedy).2, matchPartial_star]
+    conv in _ ∈ _ => rw [matchPartial_star]
     conv =>
       enter [2, 2, 2, 2, 2, 1, w', 1, weq, 2, 1, cap₁']
-      rw [(matchPartialEquiv_star_type .greedy).2, matchPartial_star]
+      rw [matchPartial_star]
     simp only [List.mem_append, List.mem_flatten, List.mem_pmap, Prod.exists, ↓existsAndEq,
       true_and, List.mem_cons, List.not_mem_nil, or_false,
       exists_prop_eq, Prod.forall, Prod.mk.injEq]
@@ -234,14 +234,12 @@ theorem matchPartialFree_star {t : StarType} {r : Regex α} (rf : r.MatchPartial
           rw [eq_comm, ← List.append_assoc, List.append_assoc wa, w.extract_append_extract rm rm'])
         have ⟨cap₁', mem₁⟩ := rf cap₁
         have ⟨term, ind⟩ := MatchPartialFree'.cast_iff.mp (ind _ hs)
-        conv at ind in _ ∈ _ => rw [(matchPartialEquiv_star_type .greedy).2]
         specialize ind _ _ mem' (wa ++ w.extract s s') wb
             (wa ++ w.extract ↑s ↑s'' ++ wb) (by
           rw [eq_comm, List.append_assoc wa, w.extract_append_extract rm rm'])
         have ⟨cap₁'', mem₁'⟩ := ind cap₁'
         conv at mem₁' => enter [2, 1]; simp only [List.append_assoc,
           w.extract_append_extract rm rm']
-        rw [(matchPartialEquiv_star_type .greedy).2] at mem₁'
         refine ⟨cap₁'', Or.inl ⟨_, _, mem₁, ?_⟩⟩
         split <;> rename_i hs₁
         · exact mem₁'
@@ -313,14 +311,14 @@ theorem MatchPartialFree.language_concat {q r : Regex α}
 
 /-- For regexes that are match-partial-free, the language of the star
 *is* the star of the language. -/
-theorem MatchPartialFree.language_star {t : StarType} {r : Regex α}
+theorem MatchPartialFree.language_star {r : Regex α}
     (rf : r.MatchPartialFree)
-    : [/⟨r⟩*‹t›/].language (fun w ↦ allTerminates_star rf.1 w _ _) =
+    : [/⟨r⟩*/].language (fun w ↦ allTerminates_star rf.1 w _ _) =
       KStar.kstar (r.language (fun w ↦ rf.1 w _ _)) := by
   ext w
   induction h : w.length using Nat.strongRec generalizing w with | ind n ind =>
-    rw [mem_language_iff, (languageEquiv_star_type .greedy).2]
-    conv at ind in _ ∈ _ => rw [mem_language_iff, (languageEquiv_star_type .greedy).2]
+    rw [mem_language_iff]
+    conv at ind in _ ∈ _ => rw [mem_language_iff]
     cases w with
     | nil =>
       simp only [isMatch_star, List.length_nil, Prod.exists, exists_and_right,
@@ -383,7 +381,7 @@ inductive CMatchPartialFree : Regex α → Type u where
   | unit c : CMatchPartialFree (unit c)
   | concat {q} {r} : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (concat q r)
   | or {q} {r} : CMatchPartialFree q → CMatchPartialFree r → CMatchPartialFree (or q r)
-  | star t {r} : CMatchPartialFree r → CMatchPartialFree (star t r)
+  | star {r} : CMatchPartialFree r → CMatchPartialFree (star r)
   | capture n {r} : CMatchPartialFree r → CMatchPartialFree (capture n r)
 
 def CRegular.cMatchPartialFree {r : Regex α} (hr : r.CRegular)
@@ -393,7 +391,7 @@ def CRegular.cMatchPartialFree {r : Regex α} (hr : r.CRegular)
   | unit c => .unit c
   | concat qind rind => .concat qind.cMatchPartialFree rind.cMatchPartialFree
   | or qind rind => .or qind.cMatchPartialFree rind.cMatchPartialFree
-  | star t rind => .star t rind.cMatchPartialFree
+  | star rind => .star rind.cMatchPartialFree
 
 /-- The classic regular operators are match-partial-free. -/
 theorem CMatchPartialFree.matchPartialFree {r : Regex α} (hr : r.CMatchPartialFree)
@@ -404,7 +402,7 @@ theorem CMatchPartialFree.matchPartialFree {r : Regex α} (hr : r.CMatchPartialF
   | unit _ => exact matchPartialFree_unit
   | concat _ _ qind rind => exact matchPartialFree_concat qind rind
   | or _ _ qind rind => exact matchPartialFree_or qind rind
-  | star _ _ rind => exact matchPartialFree_star rind
+  | star _ rind => exact matchPartialFree_star rind
   | capture n _ rind => exact matchPartialFree_capture rind
 
 def CMatchPartialFree.cTerminates {r : Regex α} (hr : r.CMatchPartialFree)
@@ -414,7 +412,7 @@ def CMatchPartialFree.cTerminates {r : Regex α} (hr : r.CMatchPartialFree)
   | unit _ => CTerminates.unit _
   | concat qt rt => CTerminates.concat qt.cTerminates rt.cTerminates
   | or qt rt => CTerminates.or qt.cTerminates rt.cTerminates
-  | star t rt => CTerminates.star t rt.cTerminates
+  | star rt => CTerminates.star rt.cTerminates
   | capture n rt => CTerminates.capture n rt.cTerminates
 
 theorem CMatchPartialFree.allTerminates {r : Regex α} (hr : r.CMatchPartialFree) :
@@ -437,7 +435,7 @@ theorem CMatchPartialFree.regular {r : Regex α} {hr : r.CMatchPartialFree}
     have ⟨rreg, req⟩ := rr
     use qreg + rreg
     rw [language_or, RegularExpression.matches'_add, qeq, req]
-  | star t rcr rr =>
+  | star rcr rr =>
     have ⟨rreg, req⟩ := rr
     use .star rreg
     rw [rcr.matchPartialFree.language_star, RegularExpression.matches'_star, req]
@@ -449,7 +447,7 @@ inductive CMinimalRegular : Regex α → Type u where
   | unit c : CMinimalRegular (unit c)
   | concat {q} {r} : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (concat q r)
   | or {q} {r} : CMinimalRegular q → CMinimalRegular r → CMinimalRegular (or q r)
-  | star t {r} : CMinimalRegular r → CMinimalRegular (star t r)
+  | star {r} : CMinimalRegular r → CMinimalRegular (star r)
 
 def CMinimalRegular.cRegular {r : Regex α} (hr : r.CMinimalRegular)
     : r.CMatchPartialFree := match hr with
@@ -457,7 +455,7 @@ def CMinimalRegular.cRegular {r : Regex α} (hr : r.CMinimalRegular)
   | unit c => .unit c
   | concat qind rind => .concat qind.cRegular rind.cRegular
   | or qind rind => .or qind.cRegular rind.cRegular
-  | star t rind => .star t rind.cRegular
+  | star rind => .star rind.cRegular
 
 theorem CMinimalRegular.allTerminates {r : Regex α} (hr : r.CMinimalRegular)
     : r.AllTerminates := hr.cRegular.allTerminates
@@ -476,7 +474,7 @@ theorem regular_iff_cMinimalRegular (l : Language α)
     induction r generalizing l with
     | zero => refine ⟨_, CMinimalRegular.bot, ?_⟩; simp [← lan, language_bot]
     | epsilon =>
-      refine ⟨_, CMinimalRegular.star .greedy CMinimalRegular.bot, ?_⟩
+      refine ⟨_, CMinimalRegular.star CMinimalRegular.bot, ?_⟩
       rw [MatchPartialFree.language_star matchPartialFree_bot]
       simp [← lan, language_bot]
     | char c =>
@@ -495,7 +493,7 @@ theorem regular_iff_cMinimalRegular (l : Language α)
       simp [language_or, ← lan, q'l, r'l]
     | star r rind =>
       have ⟨r', r'mr, r'l⟩ := rind r.matches' rfl
-      refine ⟨_, CMinimalRegular.star .greedy r'mr, ?_⟩
+      refine ⟨_, CMinimalRegular.star r'mr, ?_⟩
       rw [MatchPartialFree.language_star r'mr.matchPartialFree]
       simp [← lan, r'l]
   · intro ⟨r, reg, lan⟩

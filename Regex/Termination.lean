@@ -7,9 +7,9 @@ variable {α : Type u} [deq : DecidableEq α] {r : Regex α} {w : List α}
 
 /-- `star t r` terminates if (but not only if)
 `r` terminates for every capture and for every position starting from here -/
-theorem terminates_star_of_forall {t : StarType}
+theorem terminates_star_of_forall
     : (∀ s' ≥ s, ∀ cap', r.Terminates w s' cap') →
-      [/⟨r⟩*‹t›/].Terminates w s cap := by
+      [/⟨r⟩*/].Terminates w s cap := by
   intro term
   induction s using Pos.strongRecEnd generalizing cap with
   | ind s ind =>
@@ -56,9 +56,9 @@ theorem allTerminates_or_comm {q r : Regex α}
     : [/⟨q⟩ | ⟨r⟩/].AllTerminates ↔ [/⟨r⟩ | ⟨q⟩/].AllTerminates := by
   simp only [AllTerminates, terminates_or_comm (q := q)]
 
-theorem allTerminates_star {t : StarType} {r : Regex α}
+theorem allTerminates_star {r : Regex α}
     (rt : r.AllTerminates)
-    : [/⟨r⟩*‹t›/].AllTerminates (α := α) :=
+    : [/⟨r⟩*/].AllTerminates (α := α) :=
   fun w _ _ ↦ terminates_star_of_forall fun s' _ cap' ↦ rt w s' cap'
 
 --theorem allTerminates_star_greedy_iff_lazy {r : Regex α}
@@ -86,7 +86,7 @@ inductive CTerminates : Regex α → Type u where
   | unit c : CTerminates (unit c)
   | concat {q} {r} : CTerminates q → CTerminates r → CTerminates (concat q r)
   | or {q} {r} : CTerminates q → CTerminates r → CTerminates (or q r)
-  | star t {r} : CTerminates r → CTerminates (star t r)
+  | star {r} : CTerminates r → CTerminates (star r)
   | start : CTerminates start
   | end' : CTerminates end'
   | capture n {r} : CTerminates r → CTerminates (capture n r)
@@ -102,7 +102,7 @@ theorem CTerminates.allTerminates {r : Regex α} (hr : r.CTerminates)
   | unit c => termination
   | concat _ _ qt rt => simp [terminates_concat, qt, rt]
   | or _ _ qt rt => simp [terminates_or, qt, rt]
-  | star t _ rt => intro r s cap; apply terminates_star_of_forall; simp [rt]
+  | star _ rt => intro r s cap; apply terminates_star_of_forall; simp [rt]
   | start => termination
   | end' => termination
   | capture n _ rt => simp [terminates_capture, rt]

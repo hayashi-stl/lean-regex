@@ -12,11 +12,9 @@ def Monotone (r : Regex α) :=
     ∀ w s cap (term : r.Terminates w s cap)
     mat, mat ∈ r.matchPartial w s cap term → s ≤ mat.1
 
-theorem monotone_star {t : StarType} {r : Regex α} (rm : r.Monotone)
-    : [/⟨r⟩*‹t›/].Monotone := by
+theorem monotone_star {r : Regex α} (rm : r.Monotone)
+    : [/⟨r⟩*/].Monotone := by
   rw [Monotone]
-  conv in Terminates _ _ _ _ => rw [terminatesEquiv_star_type .greedy]
-  conv in _ ∈ _ => rw [(matchPartialEquiv_star_type .greedy).2]
   intro w s cap term
   induction s using Pos.strongRecEnd generalizing cap with | ind s ind =>
     conv in _ ∈ _ => rw [matchPartial_star]
@@ -48,7 +46,7 @@ theorem monotone : r.Monotone := by
     simp only [Monotone, matchPartial_or, List.mem_append, Prod.forall]
     intro w s cap term s' cap' mem
     exact Or.casesOn mem (fun mem ↦ qind _ _ _ _ _ mem) (fun mem ↦ rind _ _ _ _ _ mem)
-  | star t q qind => exact monotone_star qind
+  | star q qind => exact monotone_star qind
   | start => simp [Monotone, matchPartial_start]
   | end' => simp [Monotone, matchPartial_end']
   | capture n q qind =>

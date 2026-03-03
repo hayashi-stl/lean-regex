@@ -22,9 +22,6 @@ scoped syntax:max "⟨" term:min "⟩" : regex
 scoped syntax:70 regex:71 ppSpace regex:70 : regex
 scoped syntax:55 regex:56 " | " regex:55 : regex
 scoped syntax:max regex:max "*" : regex
-scoped syntax:max regex:max "*?" : regex
-scoped syntax:max regex:max "*‹" term:min "›" : regex
-scoped syntax:max regex:max " ‹" term:min "›ε" : regex
 scoped syntax:max "⊢" : regex
 scoped syntax:max "⊣" : regex
 scoped syntax:max "(" regex:min ")" : regex
@@ -59,9 +56,7 @@ macro_rules
   | `([/ $s:str /]) => `(string $s)
   | `([/ $t:regex $u:regex /]) => `(concat [/$t/] [/$u/])
   | `([/ $t:regex | $u:regex /]) => `(or [/$t/] [/$u/])
-  | `([/ $t:regex * /]) => `(star .greedy [/$t/])
-  | `([/ $t:regex *? /]) => `(star .lazy [/$t/])
-  | `([/ $t:regex *‹ $u:term › /]) => `(star $u [/$t/])
+  | `([/ $t:regex * /]) => `(star [/$t/])
   | `([/ ⊢ /]) => `(start)
   | `([/ ⊣ /]) => `(end')
   | `([/ ( $t:regex ) /]) => `([/$t/])
@@ -123,10 +118,7 @@ def delabRegex : Delab := do
     `([/ $(← exprRegex q) $(← exprRegex r) /])
   | (``Regex.or, #[_, q, r]) =>
     `([/ $(← exprRegex q) | $(← exprRegex r) /])
-  | (``Regex.star, #[_, t, r]) => match t.getAppFn' with
-    | Expr.const ``Regex.StarType.greedy _ => `([/ $(← exprRegex r) * /])
-    | Expr.const ``Regex.StarType.lazy _ => `([/ $(← exprRegex r) *? /])
-    | t => `([/ $(← exprRegex r) *‹ $(← delab t) › /])
+  | (``Regex.star, #[_, r]) => `([/ $(← exprRegex r) * /])
   | (``Regex.start, #[_]) => `([/⊢/])
   | (``Regex.end', #[_]) => `([/⊣/])
   | (``Regex.capture, #[_, n, r]) =>

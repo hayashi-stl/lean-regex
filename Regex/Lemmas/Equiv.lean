@@ -87,27 +87,30 @@ theorem terminatesEquiv_or_assoc {p q r : Regex α}
     : [/(⟨p⟩ | ⟨q⟩) | ⟨r⟩/] ≃ᵗᵉ [/⟨p⟩ | (⟨q⟩ | ⟨r⟩)/] := by
   simp only [TerminatesEquiv, terminates_or]; grind
 
-theorem terminatesEquiv_star_greedy_lazy {r : Regex α} : [/⟨r⟩*/] ≃ᵗᵉ [/⟨r⟩*?/] := by
-  simp only [TerminatesEquiv]
-  intro w s cap
-  induction s using Pos.strongRecEnd generalizing cap with | ind s ind =>
-    rw [terminates_star, terminates_star]; grind
-
-theorem terminatesEquiv_star_type {t} (u : StarType) {r : Regex α}
-    : [/⟨r⟩*‹t›/] ≃ᵗᵉ [/⟨r⟩*‹u›/] := by
-  cases t <;> cases u <;> try rfl
-  · exact terminatesEquiv_star_greedy_lazy
-  · symm; exact terminatesEquiv_star_greedy_lazy
-
-theorem terminatesEquiv_star_bot {t : StarType} : ([/⊥*‹t›/] : Regex α) ≃ᵗᵉ [//] := by
+theorem terminatesEquiv_star_bot : ([/⊥*/] : Regex α) ≃ᵗᵉ [//] := by
   rw [TerminatesEquiv]
   conv in _ ↔ _ => rw [terminates_star]
   simp [terminates_bot, terminates_empty, matchPartial_bot]
 
-theorem terminatesEquiv_star_empty {t : StarType} : ([/ε*‹t›/] : Regex α) ≃ᵗᵉ [//] := by
+theorem terminatesEquiv_star_empty : ([/ε*/] : Regex α) ≃ᵗᵉ [//] := by
   rw [TerminatesEquiv]
   conv in _ ↔ _ => rw [terminates_star]
   simp [terminates_empty, matchPartial_empty]
+
+theorem terminatesEquiv_start_concat {r : Regex α}
+    (hr : ∀ w s cap, s ≠ 0 → r.Terminates w s cap) : [/⊢ ⟨r⟩/] ≃ᵗᵉ r := by
+  simpa [TerminatesEquiv, terminates_concat, terminates_start, matchPartial_start,
+    or_iff_not_imp_left]
+
+theorem terminatesEquiv_concat_end' {r : Regex α} : [/⟨r⟩ ⊣/] ≃ᵗᵉ r := by
+  simp [TerminatesEquiv, terminates_concat, terminates_end']
+
+/-- The right side of a `concat` can be replaced with an equivalent regex -/
+theorem terminatesEquiv_any_concat {p q r : Regex α} (hqr : q ≃ᵗᵉ r)
+  : [/⟨p⟩ ⟨q⟩/] ≃ᵗᵉ [/⟨p⟩ ⟨r⟩/] := by
+  simp only [TerminatesEquiv, terminates_concat, Prod.forall]
+  conv => enter [2, 2, 2, 1, 1, h, 2, 2]; rw [hqr]
+  simp
 
 /-- Whether two regexes are (weakly) matchPartial-equivalent.
 If two regexes are weakly matchPartial-equivalent, you can replace
@@ -190,24 +193,12 @@ theorem matchPartialEquiv_or_assoc {p q r : Regex α}
     : [/(⟨p⟩ | ⟨q⟩) | ⟨r⟩/] ≃ʷᵖ [/⟨p⟩ | (⟨q⟩ | ⟨r⟩)/] := by
   refine ⟨terminatesEquiv_or_assoc, ?_⟩; simp [mem_matchPartial_or]; grind
 
-theorem matchPartialEquiv_star_greedy_lazy {r : Regex α} : [/⟨r⟩*/] ≃ʷᵖ [/⟨r⟩*?/] := by
-  refine ⟨terminatesEquiv_star_greedy_lazy, ?_⟩
-  intro w s cap term mat
-  induction s using Pos.strongRecEnd generalizing cap mat with | ind s ind =>
-    rw [mem_matchPartial_star, mem_matchPartial_star]; grind
-
-theorem matchPartialEquiv_star_type {t} (u : StarType) {r : Regex α}
-    : [/⟨r⟩*‹t›/] ≃ʷᵖ [/⟨r⟩*‹u›/] := by
-  cases t <;> cases u <;> try rfl
-  · exact matchPartialEquiv_star_greedy_lazy
-  · symm; exact matchPartialEquiv_star_greedy_lazy
-
-theorem matchPartialEquiv_star_bot {t : StarType} : ([/⊥*‹t›/] : Regex α) ≃ʷᵖ [//] := by
+theorem matchPartialEquiv_star_bot : ([/⊥*/] : Regex α) ≃ʷᵖ [//] := by
   refine ⟨terminatesEquiv_star_bot, ?_⟩
   conv in _ ↔ _ => rw [mem_matchPartial_star]
   simp [mem_matchPartial_bot, mem_matchPartial_empty]
 
-theorem matchPartialEquiv_star_empty {t : StarType} : ([/ε*‹t›/] : Regex α) ≃ʷᵖ [//] := by
+theorem matchPartialEquiv_star_empty : ([/ε*/] : Regex α) ≃ʷᵖ [//] := by
   refine ⟨terminatesEquiv_star_empty, ?_⟩
   conv in _ ↔ _ => rw [mem_matchPartial_star]
   simp [mem_matchPartial_empty]
@@ -289,18 +280,44 @@ theorem languageEquiv_or_assoc {p q r : Regex α}
     : [/(⟨p⟩ | ⟨q⟩) | ⟨r⟩/] ≃ˡᵃ [/⟨p⟩ | (⟨q⟩ | ⟨r⟩)/] :=
   matchPartialEquiv_or_assoc.languageEquiv
 
-theorem languageEquiv_star_greedy_lazy {r : Regex α} : [/⟨r⟩*/] ≃ˡᵃ [/⟨r⟩*?/] :=
-  matchPartialEquiv_star_greedy_lazy.languageEquiv
-
-theorem languageEquiv_star_type {t} (u : StarType) {r : Regex α}
-    : [/⟨r⟩*‹t›/] ≃ˡᵃ [/⟨r⟩*‹u›/] :=
-  (matchPartialEquiv_star_type u).languageEquiv
-
-theorem languageEquiv_star_bot {t : StarType} : ([/⊥*‹t›/] : Regex α) ≃ˡᵃ [//] :=
+theorem languageEquiv_star_bot : ([/⊥*/] : Regex α) ≃ˡᵃ [//] :=
   matchPartialEquiv_star_bot.languageEquiv
 
-theorem languageEquiv_star_empty {t : StarType} : ([/ε*‹t›/] : Regex α) ≃ˡᵃ [//] :=
+theorem languageEquiv_star_empty : ([/ε*/] : Regex α) ≃ˡᵃ [//] :=
   matchPartialEquiv_star_empty.languageEquiv
+
+theorem languageEquiv_start_concat {r : Regex α}
+    (hr : ∀ w s cap, s ≠ 0 → r.Terminates w s cap) : [/⊢ ⟨r⟩/] ≃ˡᵃ r := by
+  refine ⟨terminatesEquiv_start_concat hr, ?_⟩
+  simp [isMatch_concat, matchPartial_start]
+  simp [IsMatch, match'_def]
+
+theorem languageEquiv_concat_end' {r : Regex α} : [/⟨r⟩ ⊣/] ≃ˡᵃ r := by
+  refine ⟨terminatesEquiv_concat_end', ?_⟩
+  simp [isMatch_concat, matchPartial_end']
+  simp [IsMatch, match'_def]
+
+theorem languageEquiv_end'_concat {q r : Regex α} (hqr : q ≃ˡᵃ r)
+  : [/⊣ ⟨q⟩/] ≃ˡᵃ [/⊣ ⟨r⟩/] := by
+  refine ⟨terminatesEquiv_any_concat hqr.1, ?_⟩
+  simp only [isMatch_concat, Prod.exists, exists_and_right, matchPartial_end', Fin.coe_ofNat_eq_mod,
+    Nat.zero_mod, List.mem_ite_nil_right, List.mem_cons, List.not_mem_nil, or_false, Prod.mk.injEq]
+  intro w term
+  constructor <;> (
+    rintro ⟨s, cap, ⟨len0, s0, cap0⟩, s', ⟨cap', mem⟩, s'eq⟩
+    rw! [s0, cap0] at mem
+    generalize_proofs _ term' at mem
+    have ism : IsMatch _ w term' := by
+      simp only [IsMatch, match'_def, ne_eq, List.filter_eq_nil_iff, decide_eq_true_eq,
+        Prod.forall, not_forall, Decidable.not_not]
+      exact ⟨_, _, mem, s'eq⟩
+    first | rw [hqr.2] at ism | rw [hqr.symm.2] at ism
+    simp only [IsMatch, match'_def, ne_eq, List.filter_eq_nil_iff, decide_eq_true_eq,
+      Prod.forall, not_forall, Decidable.not_not] at ism
+    rcases ism with ⟨s', cap', mem, s'eq⟩
+    rw! [← s0, ← cap0] at mem
+    exact ⟨_, _, ⟨len0, s0, cap0⟩, _, ⟨_, mem⟩, s'eq⟩
+  )
 
 /-- Whether two regexes are strongly matchPartial-equivalent.
 If two regexes are strongly matchPartial-equivalent, you can replace

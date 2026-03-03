@@ -20,16 +20,6 @@ namespace Regex
 variable {ℓ : ℕ} {α : Type*} [deq : DecidableEq α] {r : Regex α} {w : List α}
   {s : Pos w} {cap : Captures w}
 
-theorem StarType.map_match {α β : Type*} (f : α → β) (t : StarType) (g l : α)
-    : f (match t with | .greedy => g | .lazy => l) =
-      match t with | .greedy => f g | .lazy => f l := by rcases t <;> simp
-
-theorem StarType.flatten_match {α : Type*} (t : StarType) (gg gl lg ll : α)
-    : (match t with
-        | .greedy => match t with | .greedy => gg | .lazy => gl
-        | .lazy => match t with | .greedy => lg | .lazy => ll) =
-      (match t with | .greedy => gg | .lazy => ll) := by rcases t <;> simp
-
 /-- Initialize a partial match stack -/
 def initMatchPartial (r : Regex α) (w : List α) (s : Pos w) (cap : Captures w)
     : MatchStack w where
@@ -296,10 +286,9 @@ theorem terminates_or_comm {q r : Regex α}
     : [/⟨q⟩ | ⟨r⟩/].Terminates w s cap ↔ [/⟨r⟩ | ⟨q⟩/].Terminates w s cap := by
   simp only [terminates_or]; rw [and_comm]
 
-theorem Action.terminates_star {t : StarType}
-    {old new arg : PartialMatches w}
-    : (MatchStack.mk [star t r s cap old new] arg).Terminates ↔
-      ∀ mat ∈ old, s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
+theorem Action.terminates_star {old new arg : PartialMatches w}
+    : (MatchStack.mk [star r s cap old new] arg).Terminates ↔
+      ∀ mat ∈ old, s < mat.1 → [/⟨r⟩*/].Terminates w mat.1 mat.2 := by
   constructor
   · intro term mat mem slt
     induction old generalizing cap new arg with | nil => contradiction | cons ent mat' ind =>
@@ -322,18 +311,18 @@ theorem Action.terminates_star {t : StarType}
         exact ind fun m mem ↦ term _ (List.mem_cons_of_mem _ mem)
       · exact ind fun m mem ↦ term _ (List.mem_cons_of_mem _ mem)
 
-theorem Action.terminates_starWait {t : StarType} {arg : PartialMatches w}
-    : (MatchStack.mk [starWait t r s cap] arg).Terminates ↔
-      ∀ mat ∈ arg, s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
+theorem Action.terminates_starWait {arg : PartialMatches w}
+    : (MatchStack.mk [starWait r s cap] arg).Terminates ↔
+      ∀ mat ∈ arg, s < mat.1 → [/⟨r⟩*/].Terminates w mat.1 mat.2 := by
   step only [List.append_nil]
   exact terminates_star
 
 /-- `star t r` terminates iff `r` terminates and `r` terminates for every
 advancing end position and match provided by `r` -/
-theorem terminates_star {t : StarType}
-    : [/⟨r⟩*‹t›/].Terminates w s cap ↔ ∃ term : r.Terminates w s cap,
+theorem terminates_star
+    : [/⟨r⟩*/].Terminates w s cap ↔ ∃ term : r.Terminates w s cap,
       ∀ mat ∈ r.matchPartial w s cap term,
-        s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2 := by
+        s < mat.1 → [/⟨r⟩*/].Terminates w mat.1 mat.2 := by
   constructor
   · intro term
     rw [Terminates, initMatchPartial] at term
@@ -450,17 +439,14 @@ theorem mem_matchPartial_or_comm {q r : Regex α}
       mat ∈ matchPartial [/⟨r⟩ | ⟨q⟩/] w s cap (terminates_or_comm.mp term) := by
   simp only [matchPartial_or, List.mem_append]; rw [or_comm]
 
-theorem Action.star_run {t : StarType} {old new arg : PartialMatches w}
-    (term : ∀ mat ∈ old, s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2)
-    : (mk [.star t r s cap old new] arg).run (terminates_star.mpr term)
-      = let res := new ++ arg ++ (old.pmap (fun ent rt ↦ if h : s < ent.1
-          then [/⟨r⟩*‹t›/].matchPartial w ent.1 ent.2 (rt h)
-          else [ent]) term).flatten;
-        match (generalizing := false) t with
-        | .greedy => res ++ [(s, cap)]
-        | .lazy => [(s, cap)] ++ res := by
+theorem Action.star_run {old new arg : PartialMatches w}
+    (term : ∀ mat ∈ old, s < mat.1 → [/⟨r⟩*/].Terminates w mat.1 mat.2)
+    : (mk [.star r s cap old new] arg).run (terminates_star.mpr term)
+      = new ++ arg ++ (old.pmap (fun ent rt ↦ if h : s < ent.1
+          then [/⟨r⟩*/].matchPartial w ent.1 ent.2 (rt h)
+          else [ent]) term).flatten ++ [(s, cap)] := by
   induction old generalizing new arg with
-  | nil => step; step; rfl
+  | nil => step; step
   | cons ent mat ind =>
     simp only [List.mem_cons, forall_eq_or_imp, List.pmap_cons,
       List.flatten_cons] at term ⊢
@@ -473,35 +459,27 @@ theorem Action.star_run {t : StarType} {old new arg : PartialMatches w}
     · rw [ind term.2]
       simp
 
-theorem Action.starWait_run {t : StarType} {arg : PartialMatches w}
-    (term : ∀ mat ∈ arg, s < mat.1 → [/⟨r⟩*‹t›/].Terminates w mat.1 mat.2)
-    : (mk [.starWait t r s cap] arg).run (terminates_starWait.mpr term)
-      = let res := (arg.pmap (fun ent rt ↦ if h : s < ent.1
-          then [/⟨r⟩*‹t›/].matchPartial w ent.1 ent.2 (rt h)
-          else [ent]) term).flatten;
-        match (generalizing := false) t with
-        | .greedy => res ++ [(s, cap)]
-        | .lazy => [(s, cap)] ++ res := by
+theorem Action.starWait_run {arg : PartialMatches w}
+    (term : ∀ mat ∈ arg, s < mat.1 → [/⟨r⟩*/].Terminates w mat.1 mat.2)
+    : (mk [.starWait r s cap] arg).run (terminates_starWait.mpr term)
+      = (arg.pmap (fun ent rt ↦ if h : s < ent.1
+          then [/⟨r⟩*/].matchPartial w ent.1 ent.2 (rt h)
+          else [ent]) term).flatten ++ [(s, cap)] := by
   step only [List.append_nil]
   exact star_run term
 
-theorem matchPartial_star {t : StarType}
-    (term : [/⟨r⟩*‹t›/].Terminates w s cap)
-    : matchPartial [/⟨r⟩*‹t›/] w s cap term =
-      let res := ((r.matchPartial w s cap (terminates_star.mp term).1).pmap
+theorem matchPartial_star (term : [/⟨r⟩*/].Terminates w s cap)
+    : matchPartial [/⟨r⟩*/] w s cap term =
+      ((r.matchPartial w s cap (terminates_star.mp term).1).pmap
         (fun ent rt ↦ if h : s < ent.1
-          then [/⟨r⟩*‹t›/].matchPartial w ent.1 ent.2 (rt h)
-          else [ent]) (terminates_star.mp term).2).flatten;
-      match (generalizing := false) t with
-      | .greedy => res ++ [(s, cap)]
-      | .lazy => [(s, cap)] ++ res := by
+          then [/⟨r⟩*/].matchPartial w ent.1 ent.2 (rt h)
+          else [ent]) (terminates_star.mp term).2).flatten ++ [(s, cap)] := by
   rw [matchPartial]
   simp only [initMatchPartial]
   step
   run_top!
   rw! [← matchPartial_eq_run]
   rw [Action.starWait_run (terminates_star.mp term).2]
-  rfl
 
 theorem matchPartial_start
     : matchPartial [/⊢/] w s cap terminates_start

@@ -31,31 +31,24 @@ theorem mem_matchPartial_or {q r : Regex α} (term)
         mat ∈ r.matchPartial w s cap (terminates_or.mp term).2 := by
   simp [matchPartial_or]
 
-private theorem mem_dite {t : StarType} {s'} {cap'} {term}
-  : (mat ∈ if _ : s < s' then [/⟨r⟩*‹t›/].matchPartial w s' cap' term else [(s', cap')]) ↔
-    if _ : s < s' then mat ∈ [/⟨r⟩*‹t›/].matchPartial w s' cap' term else mat = (s', cap') := by
-  split <;> simp
-
-theorem mem_matchPartial_star {t : StarType} (term)
-    : mat ∈ [/⟨r⟩*‹t›/].matchPartial w s cap term ↔
+theorem mem_matchPartial_star (term)
+    : mat ∈ [/⟨r⟩*/].matchPartial w s cap term ↔
       mat = (s, cap) ∨
       ∃ mid, ∃ mem : mid ∈ r.matchPartial w s cap (terminates_star.mp term).1,
         if h : s < mid.1
-          then mat ∈ [/⟨r⟩*‹t›/].matchPartial w mid.1 mid.2
+          then mat ∈ [/⟨r⟩*/].matchPartial w mid.1 mid.2
             ((terminates_star.mp term).2 _ mem h)
           else mat = mid := by
   rw [matchPartial_star]
-  simp only [List.cons_append, List.nil_append, Prod.exists]
-  split <;> (
-    simp only [List.mem_append, List.mem_flatten, List.mem_pmap, Prod.exists, ↓existsAndEq,
-      true_and, List.mem_cons, List.not_mem_nil, or_false]
-    try rw [or_comm (b := mat = _)]
-    rw [iff_eq_eq]; congr; ext x;
-    rw [iff_eq_eq]; congr; ext x';
-    rw [iff_eq_eq]; congr; ext x'';
-    rw [iff_eq_eq]
-    split <;> simp
-  )
+  simp only [Prod.exists]
+  simp only [List.mem_append, List.mem_flatten, List.mem_pmap, Prod.exists, ↓existsAndEq,
+    true_and, List.mem_cons, List.not_mem_nil, or_false]
+  try rw [or_comm (b := mat = _)]
+  rw [iff_eq_eq]; congr; ext x;
+  rw [iff_eq_eq]; congr; ext x';
+  rw [iff_eq_eq]; congr; ext x'';
+  rw [iff_eq_eq]
+  split <;> simp
 
 theorem mem_matchPartial_start
     : mat ∈ [/⊢/].matchPartial w s cap terminates_start ↔
